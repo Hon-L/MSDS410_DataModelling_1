@@ -1,0 +1,236 @@
+---
+title: "Luu_Computational6"
+author: "Hon Luu"
+date: "6/2/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(ggplot2)
+library(psych)
+library(dplyr)
+```
+
+
+
+```{r}
+data <- read.csv('stress.csv')
+```
+
+##### 1.   For the STRESS variable, make a histogram and obtain summary statistics.   Obtain a normal probability (Q-Q) plot for the STRESS variable.   Is STRESS a normally distributed variable?  What do you think is its most likely probability distribution for STRESS?  Give a justification for the distribution you selected.  
+***  
+Based on the histogram and the QQ plot, it does not appear that Stress is normally distributed.  Based on the skewness of the bar chart, it does appear to resemble a poisson or a negative binomial distribution.  Inspecting the mean and variance, they are not equal.  In fact, the variance is almost twice as high as the mean, so it's overdispersed negative binomial distribution.
+
+```{r}
+describe(data$STRESS)
+ggplot(data=data, aes(x=STRESS)) + geom_bar()
+qqnorm(data$STRESS)
+library(MASS)
+library(pscl)
+
+```
+
+
+##### 2.   Fit an OLS regression model to predict STRESS (Y) using COHES, ESTEEM, GRADES, SATTACH as explanatory variables (X).   Obtain the typical diagnostic information and graphs.  Discuss how well this model fits.  Obtain predicted values (Y_hat) and plot them in a histogram.  What issues do you see?  
+***  
+The equation for this model is $Stress = 5.71281 -.02319*Cohes - .04129*Esteem -.04170*Grades - .03042*Sattach$.  
+The adjusted $R^2$ is .078, so this model explains only the 7.8% of the variance.  
+The diagnostics do not fit too well based on the plots (because the datat is not noramlly distributed:  
+Residual vs fitted doesn't look random, the QQ plot appears to fail the pen test.  
+Another major concern is that with a linear regression, its very possible to get negative values, so a OLS model may not be the best.
+```{r}
+model1 <- lm(STRESS~COHES+ESTEEM+GRADES+SATTACH, data=data)
+summary(model1)
+anova((model1))
+plot(model1)
+
+Y_hats<-data.frame(fitted_values=model1$fitted.values)
+ggplot(data=Y_hats, aes(x=fitted_values)) + geom_histogram(bins=60, color="black", fill = "purple")
+
+```
+
+##### 3.  Create a transformed variable on Y that is LN(Y).   Fit an OLS regression model to predict LN(Y) using COHES, ESTEEM, GRADES, SATTACH as explanatory variables (X).   Obtain the typical diagnostic information and graphs.  Discuss how well this model fits.  Obtain predicted values (LN(Y)_hat) and plot them in a histogram.  What issues do you see?  Does this correct the issue?  
+***  
+The first issue is that $log(0)$ is undefined, so the model errors out.  As there are majority observations with zeros removing them may be changing the story of the analysis.  Removing the 0s does output a model, but we see the same situation with model diagnstics.  More importantly, we lost about 33% of our data.  
+
+```{r}
+data$logStress <- log(data$STRESS)
+data2<-data
+data2$STRESS<- ifelse(data$STRESS==0,NA,data$STRESS)
+data2$logStress <- log(data$STRESS)
+data2 <- data2 %>% filter(STRESS >0)
+model2 <- lm(logStress~COHES+ESTEEM+GRADES+SATTACH, data=data2)
+summary(model2)
+plot(model2)
+
+Y_hats<-data.frame(fitted_values=model2$fitted.values)
+ggplot(data=Y_hats, aes(x=fitted_values)) + geom_histogram(bins=60, color="black", fill = "purple")
+
+
+```
+
+##### 4.  Use the glm() function to fit a Poisson Regression for STRESS (Y) using COHES, ESTEEM, GRADES, SATTACH as explanatory variables (X).   Interpret the model’s coefficients and discuss how this model’s results compare to your answer for part 3).  Similarly, fit an over-dispersed Poisson regression model using the same set of variables.   How do these models compare?  
+***  
+The model equation of the poisson is $Y = 2.734513 -.012918*Cohes -.023692*Esteem - .023471*Grades -.016481*Sattach$.  
+With a poisson regression, the dependent variable is at a log scale.  So a one unit change in the indepedent variable, the expected log count will change by the coefficient amount.  To make the results more interpretable,  you would exponetiate the everything on the Y value to get the fitted count value.  The results in this model are just a bit lower than the OLS model, but directionarly still the same, and also similar in relativity to each other.  
+Running a quasipoisson to fit an over-dispersed poisson appears to yeidl the same coefficients, with the differences being minor in the standard error the t-statistic.
+
+```{r}
+poisson1 <- glm(STRESS~COHES+ESTEEM+GRADES+SATTACH, data=data, family = "poisson")
+summary(poisson1)
+
+plot(poisson1)
+
+Y_hats<-data.frame(fitted_values=poisson1$fitted.values)
+ggplot(data=Y_hats, aes(x=fitted_values)) + geom_histogram(bins=60, color="black", fill = "purple")
+
+poisson2 <- glm(STRESS~COHES+ESTEEM+GRADES+SATTACH, data=data, family = "quasipoisson")
+summary(poisson2)
+
+Y_hats2<-data.frame(fitted_values=poisson2$fitted.values)
+ggplot(data=Y_hats2, aes(x=fitted_values)) + geom_histogram(bins=60, color="black", fill = "purple")
+
+
+```
+
+
+##### 5.  Based on the Poisson model in part 4), compute the predicted count of STRESS for those whose levels of family cohesion are less than one standard deviation below the mean (call this the low group), between one standard deviation below and one standard deviation above the mean (call this the middle group), and more than one standard deviation above the mean (high).   What is the expected percent difference in the number of stressful events for those at high and low levels of family cohesion?  
+***  
+The mean count for "low", "middle", "high" is 2.502, 1.66,1.189.  The differences between 
+
+
+low-medium: 50.2%
+low-high: 110%
+medium-high: 40%
+```{r}
+describe(data$COHES)
+data$COHESGroup <- ifelse(data$COHES <=41.62,"low",ifelse(data$COHES<=64.38,"middle","high"))
+data$fitted <- poisson1$fitted.values
+
+tapply(data$fitted, list(data$COHESGroup), mean)
+```
+
+##### 6.  Compute the AICs and BICs from the Poisson Regression and the over-dispersed Poisson regression models from part 4).   Is one better than the other? 
+***  
+
+```{r}
+
+
+nb<-glm.nb(STRESS~COHES+ESTEEM+GRADES+SATTACH, data=data)
+
+summary(nb)
+poissonAIC<-AIC(poisson1)
+poissonBIC <-BIC(poisson1)
+nbAIC<-AIC(nb)
+nbBIC<-BIC(nb)
+```
+
+The quasi poisson did not generate an AIC, so I re-ran the model using a negative binomal.  The AIC and BIC for the poisson is `r poissonAIC` and `r poissonBIC` respectively.  The AIC for the negative binomial is `r nbAIC` and `r nbBIC` respectively.  the lower AIC/BIC on the negative binomial appears to suggest that the negative binomial is a better model
+
+
+##### 7.   Using the Poisson regression model from part 4), plot the deviance residuals by the predicted values.  Discuss what this plot indicates about the regression model.  
+***  
+The first thought is that variance is not constant.  This is already given since we assume this is some sort of poisson or negative binomial distribution.  A point to notice is that as the mean counts increases (fitted increases), the variance decreases.  Also, with some data points at the top with a very high deviance, it may be an indication of outliers.  Finally....because we see the variance being so different and so high,  This can indicates a negative binomial may fit better.
+ 
+```{r}
+data$poisson1Deviance<-poisson1$residuals
+
+ggplot(data=data, aes(x=fitted, y = poisson1Deviance)) + geom_jitter(fill = "purple")
+
+
+```
+
+##### 8.   Create a new indicator variable (Y_IND) of STRESS that takes on a value of 0 if STRESS=0 and 1 if STRESS>0.   This variable essentially measures is stress present, yes or no.   Fit a logistic regression model to predict Y_IND using the variables using COHES, ESTEEM, GRADES, SATTACH as explanatory variables (X).  Report the model, interpret the coefficients, obtain statistical information on goodness of fit, and discuss how well this model fits.  Should you rerun the logistic regression analysis?  If so, what should you do next?  
+***  
+the model equation is $Y = 1.264559 + -.004406*Cohes -.004159*Esteem - .005465*Grades -.005831*Sattach$.  
+The coefficients are in a log odds scale, but using 0 as the basis of interpretation, but for 1 unit increase in coefficient (i,e 1 unit increase in Cohes), the log odds would increase by the coefficient (i,e -.004406).  
+
+We see a slight decrease when comparing the null and residual deviances.  
+AIC is 864.  Running the model a few more times on the full model and excluding a variable each time, does yield a change in AIC, but the change is minor.  
+Doing the liklihood test appears to show that we cannot reject the null hypothesis that $\Beta$ = 0.  This seems to be in line with what we are seeing in the coefficients where none of them are significant.
+```{r}
+
+data$Y_IND <- ifelse(data$STRESS==0,0,1)
+#data$Y_IND <- as.factor(data$Y_IND)
+
+logit1 <- glm(Y_IND~ COHES+ESTEEM+GRADES+SATTACH, data=data)
+summary(logit1)
+
+logit2 <- glm(Y_IND~ESTEEM+GRADES+SATTACH, data=data)
+logit3 <- glm(Y_IND~ COHES+GRADES+SATTACH, data=data)
+logit4 <- glm(Y_IND~ COHES+ESTEEM+SATTACH, data=data)
+logit5 <- glm(Y_IND~ COHES+ESTEEM+GRADES, data=data)
+
+anova(logit1,logit2)
+anova(logit1,logit3)
+anova(logit1,logit4)
+anova(logit1,logit5)
+
+summary(logit2)
+summary(logit3)
+summary(logit4)
+summary(logit5)
+
+```
+
+
+##### 9.  It may be that there are two (or more) process at work that are overlapped and generating the distributions of STRESS(Y).   What do you think those processes might be?  To conduct a ZIP regression model by hand, fit a Logistic Regression model to predict if stress is present (Y_IND), and then use a Poisson Regression model to predict the number of stressful events (STRESS) conditioning on stress being present.  Is it reasonable to use such a model?   Combine the two fitted model to predict STRESS (Y).  Obtained predicted values and residuals.  How well does this model fit?   HINT:   You have to be thoughtful about this.  It is not as straight forward as plug and chug!   
+***  
+There's 2 things going on.  there's the logistic regression piece to predict 0/1  for if a person does or does not have stress.  Than there's the poisson to predict the count value of the stress.  The product of both would be the expected value.  
+
+Looking at the fitted values of the logistic regresson, all the datapoints are scattered around .5 and higher, so it's actually not predicting 0's at all.  However, we know that there are 0's present.  Combining the data, the models and inspecting the residuals we do see a pattern
+
+
+```{r}
+
+logistic<- glm(Y_IND~COHES+ESTEEM+GRADES+SATTACH, data=data, family = "binomial")
+poisson <- glm(STRESS~COHES+ESTEEM+GRADES+SATTACH, data=data, family = "poisson")
+
+summary(logistic)
+summary(poisson)
+
+data$logisticfit <- logistic$fitted.values
+data$poissonfit <- poisson$fitted.values
+
+data$Expectedvalue <- data$logisticfit*data$poissonfit
+
+data$residuals <-data$Expectedvalue-data$STRESS
+
+
+```
+
+
+##### 10.  Use the pscl package and the zeroinfl() function to Fit a ZIP model to predict STRESS(Y).   You should do this twice, first using the same predictor variable for both parts of the ZIP model.   Second, finding the best fitting model.   Report the results and goodness of fit measures.    Synthesize your findings across all of these models, to reflect on what you think would be a good modeling approach for this data.  
+***  
+The first model using the original 4 variables yielded similar results where some coefficients are significant, but most were not with the logistic regression. The first model with all 4 variables yielded just okay results.  We see a lot of insignificant variables that we can potentially drop. The previous examples above appear to indicate that dropping variables only reduced AIC by a minimal  percent.  
+
+For the second model, I am only using the significant variables. The overall summary is still signficant which is good and when we look at the loglikelihood, the increase is minimal.  Given that we want to favor simplicity,  I believe model #2 would be sufficient.
+
+The interpretation would be:  
+For the logitistic regression:  
+for a one unit increase in COHES,  the probability of having stress would be decreased by .010739 in log odds scale. you would exponentiate that to get the odds.  
+for the poisson:  
+For someone who does have stress, a one unit increase would result an increase in the log of stress by .02314.  
+
+Overeall, this is a very intersting assignment.  The idea of predicting counts is simple and intuitive, but the model building process is a bit confusing especially with the changes in scale.  
+
+```{r}
+zf<-zeroinfl(formula = STRESS~ COHES+ESTEEM+GRADES+SATTACH | COHES+ESTEEM+GRADES+SATTACH, data=data)
+#summary(zf)
+
+zf1<-zeroinfl(formula = STRESS~ COHES+ESTEEM | COHES, data=data)
+summary(zf)
+summary(zf1)
+
+data$zipfit <-zf1$fitted.values
+data$zipresidual <- zf1$residuals
+
+ggplot(data=data, aes(x=zipfit, y = zipresidual)) + geom_jitter(fill = "purple")
+
+
+```
+
