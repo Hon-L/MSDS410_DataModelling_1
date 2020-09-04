@@ -1,0 +1,519 @@
+---
+title: "Luu_CompAssign4"
+author: "Hon Luu"
+date: "5/12/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r message=FALSE}
+library(lessR)
+library(ggplot2)
+```
+
+
+```{r}
+data <- read.csv(file="NutritionStudy.csv",head=TRUE,sep=",", stringsAsFactors = TRUE)
+```
+
+##### 1)	Consider the continuous variable, FIBER.  Is this variable correlated with Cholesterol?  Obtain a scatterplot and appropriate statistics to address this question.  
+***  
+The scatter plot does show a certain degree of correlation.  Looking at the lowest dots across the X axis, I do make out a slight upward trend up through the Fiber <30.  The same can be said for the overall trend of the scatter plots.  However, the upward direction does seem to tail and taper off at Fiber  = 30.  There aren't that many points at Fiber = 30 anyways, so potentially we can ignore that diminishing upward trend.
+
+Generating the correlation coefficient, you get a value of .15, which is low, but a positive correlation nonetheless. 
+
+```{r}
+ggplot(data = data, aes(x= Fiber, y=Cholesterol)) + geom_point() + theme_classic() + geom_smooth(method = 'loess') + labs(title = "Fiber vs Cholestorol")
+cor(data$Cholesterol,data$Fiber)
+```
+
+##### 2)	Fit a simple linear regression model that uses FIBER to predict CHOLESTEROL(Y).  Report the model, interpret the coefficients, discuss the goodness of fit.  
+***  
+The Equation for this model is $Y=193.701+3.813X_{1}$.  
+The interpretation is that if someone doesn't eat fiber, their cholestorol will be 193.701.  
+For every unit of fiber they eat, their cholestorol will increase by 3.813.
+
+
+The $R^2$ is .02, which means it only explains 2.0% of the variance.  This indicates that the fiber variable is not enough to predict cholestorol.  The variable is significant though, at a 5% cutoff, so we reject the null hyptohesis that the slope is 0. So any relationship we establish between these 2 variables can be real (and not due to chance).  
+This may be a variable I would keep throughout the analysis
+
+The F test:  
+$H_{0}: \beta_{1} = 0$  
+$H_{a}: \beta_{i} \neq 0$  
+Looking at the ANOVA and the F statistic, we can reject the null hypotheis that $\beta = 0$.  
+
+While the $R^2$ is low because it doesnt explain all the variance, the hypothesis tests is telling us that the variable does have predictive power and that the  slope not equal to 0 is not due to chance.  
+
+Checking  assumptions:  
+**Linearity** - we do see more or less a linear pattern, until the < 30 fiber counts.  But we dont see any non-linear patterns like a polynomial, exponential, etc etc.  
+**Homoscedasticity** - The residuals vs fitted graph dont appear to be completly constant. Towards the higher end of the fitted values, we dont see the same distribution around the x=0 as the other values.  
+**residual normality** -  the QQ plot does appear to show that the residuals are not perfectly normally distributed towards the top ends.
+**multicollinearity** -  Since we are only using 1 predictor, this does not apply.  
+The **scale location** plot tells the same story as the residual plot, but something interesting is that looking at the red line, the magnitude of the residuals are fairly flat across all X's.  
+**levearage:**  We dont see any outliers as all the points are within the cooks distance line.
+
+
+```{r}
+model1 <- lm(Cholesterol~Fiber, data=data)
+summary(model1)
+plot(model1)
+
+anova(model1)
+```
+
+
+##### 3)	For the ALCOHOL categorical variable, create a set of dummy coded (0/1) indicator variables.   Fit a multiple linear model that uses the FIBER continuous variable and the ALCOHOL dummy coded variables to predict the response variable Y=CHOLESTEROL.   Remember to leave one of the dummy coded variables out of the model so that you have a basis of interpretation for the constant term.  Report the model, interpret the coefficients, discuss hypothesis test results, goodness of fit statistics, diagnostic graphs, and leverage, influence and Outlier statistics.  This is called an Analysis of Covariance Model (ANCOVA)  
+***  
+The Equation for this model is $Y=189.266+3.813X_{1}-2.523X_{2}+44.429X_{3}$.  
+**The interpretation is as follows:**  
+when all betas are equal to 0 (no influence in any of the variables or if the value is -), the cholestorol is 189.266.  
+
+**Fiber Variable:**  
+For alcohol = 0 as fiber increases 1 unit, cholestorol increases 3.813 units.  
+
+**Alcohol Variable:**  
+using 0 alcohol consumption as the basis for comparison, for someone who drinks >0 alcohol and <10 units, their total cholestorol would be the same as someone who drinks 0 alcohol, but you would then decrease by -2.523.
+
+using 0 alcohol consumption as the basis for comparison, for someone who drink >10  units, their total cholestorol would be the same as someone who drinks 0 alcohol, but you would then increasee it by +44.429
+
+
+The adjusted $R^2$ is .02363, which means it only explains 2.4% of the variance.  The p value for fiber is significant while the p value for alcohol is insignificant.
+
+**The F test:**  
+$H_{0}: \beta_{1} = \beta_{2} = \beta_{3}= 0$  
+$H_{a}:$  at least one $\beta_{i} \neq 0$  
+Looking at the ANOVA and also looking at the F statistic in the summary table, we see p-value at .015 and we do see  signficant Pr(>F). With this, we can reject the null hypothesis that $H_{0}$ that all $\beta$ = 0.
+
+While the $R^2$ is low because it doesnt explain all the variance, the hypothesis tests is telling us that the variable does have predictive power and that the  slope not equal to 0 is not due to chance.  
+
+Checking  assumptions:  
+
+**Homoscedasticity** - The residuals vs fitted graph dont appear to be completly constant. Towards the higher end of the fitted values, we dont see the same distribution around the x=0 as the other values. (Same as the prior chart with only fiber as a variable)  
+**residual normality** -  the QQ plot does appear to show that the residuals are not perfectly normally distributed towards the top ends.  
+**multicollinearity** -  Plotting a simple scatter of fiber vs alcohol, we do not see obvious signs of multicollinearity.  
+**The scale location** plot tells the same story as the residual plot, but something interesting is that looking at the red line, the magnitude of the residuals are fairly flat across all X's.    
+**levearage:**  We dont see any outliers as all the points are within the cooks distance line.  
+
+```{r}
+data$Alcohol_d0 <- ifelse(data$Alcohol==0,1,0)
+data$Alcohol_d1 <- ifelse(data$Alcohol<10 & data$Alcohol>0,1,0)
+data$Alcohol_d2 <- ifelse(data$Alcohol>=10,1,0)
+
+model2 <- lm(Cholesterol~Fiber + Alcohol_d1 + Alcohol_d2, data=data)
+
+summary(model2)
+anova(model2)
+plot(model2)
+
+plot(data$Fiber,data$Alcohol)
+```
+
+##### 4)	Use the ANCOVA model from task 3) to obtain predicted values for CHOLESTEROL(Y).   Now, make a scatterplot of the Predicted Values for Y (y-axis) by FIBER (X), but color code the records for the different groups of ALCOHOL.  What do you notice about the patterns in the predicted values of Y?   Now, make a scatterplot of the actual values of CHOLESTEROL(Y) by FIBER (X), but color code by the different groups of the ALCOHOL variable.  If you compare the two scatterplots, does the ANCOVA model appear to fit the observed data very well?   Or, is a more complex model needed?  
+***  
+Plotting a scatter plot of fitted versus fiber and grouped by alcoholgroup, we see a straight line for each alcohol group. The lines are all parallel to each other (with the same slope).  
+Now, when we plot the actual versus fiber, and color code based on alcohol group, we see a much more complex and interwined scatter plot.  
+This is telling me that the fitted model did not fit the observed data very well.  The fitted seemed to oversimplfy the relationship beteween fiber and cholestorol.  A more complex model may be needed.
+
+```{r}
+alcoholdata <-data
+alcoholdata$fitted = model2$fitted.values
+alcoholdata$alcoholgroup <- ifelse(alcoholdata$Alcohol_d0==1,1,ifelse(alcoholdata$Alcohol_d1==1,2,3))
+ggplot(data=alcoholdata, aes(x=Fiber, 
+                      y=fitted, 
+                      color = factor(alcoholgroup)))+geom_point() + labs(title = "fiber vs cholestorol by group")
+#+ geom_smooth(method=lm, aes(fill=factor(alcoholgroup)))
+
+Plot(Fiber,Cholesterol, by = alcoholgroup,  fit = TRUE, data=alcoholdata)
+```
+
+##### 5)	Create new interaction variables by multiplying the dummy coded variables for ALCOHOL by the continuous FIBER(X) variable.  Save these product variables to your dataset.  Now, to build the model, start with variables in your ANCOVA model from task 4) and add the interaction variables you just created into the multiple regression model.   Don’t forget, there is one category that is the basis of interpretation.  DO NOT include any interaction term that is associated with that category.  This is called an Unequal Slopes Model.  Fit this model, and save the predicted values.   Plot the predicted values for CHOLESTEROL (Y) by FIBER(X).  Discuss what you see in this graph.   In addition, report the model, interpret the coefficients, discuss hypothesis test results, goodness of fit statistics, diagnostic graphs, and leverage, influence and Outlier statistics.  
+***  
+The Equation for this model is $Y=230.3434+.6363X_{1}-62.8481X_{2}-63.3814X_{3}+4.7976X_{5} + 9.0742X_{6}$.  
+
+**The interpretation is as follows:**  
+when all betas are equal to 0 (no influence in any of the variables), the cholestorol is 230.3434  
+
+**Fiber Variable:**  
+For alcohol = 0 as fiber increases 1 unit, cholestorol increases .6363 units.  
+
+**Alcohol Variable:**  
+using 0 alcohol consumption as the basis for comparison, for someone who drinks >0 alcohol and <10 units, their total cholestorol would be the same as someone who drinks 0 alcohol, but you would then decrease by -62.848
+
+using 0 alcohol consumption as the basis for comparison, for someone who drink >10  units, their total cholestorol would be the same as someone who drinks 0 alcohol, but you would then decrease it by 63.3814
+
+**Interacton Variables:**
+Looking at the interaction of <10 alcohol and fiber, the coefficient of 4.7976 tells us that the original slope of .6363 is now (4.7976 + .6363) = 5.4339.
+
+Looking at the interaction of >10 alcohol and fiber, the coefficient of 9.0742 is telling us that the the original slope of .6363 is  now (.6363 + 9.0742) = 9.7105.  
+
+This gives us the impression that higher alcohol volume combined with fiber, yields a higher rate of change in cholestorol. 
+The adjusted $R^2$ is .028, which means it only explains 2.8% of the variance.  The p value for fiber is significant while the p value for alcohol and it's interactions is insignificant.
+
+The F test:  
+$H_{0}: \beta_{1} = \beta_{2} = \beta_{3}= \beta_{4} = \beta_{5} =0$  
+$H_{a}:$  at least one $\beta_{i} \neq 0$  
+Looking at the ANOVA and the F statistic and also looking at the F statistic in the summary table, we see p-value at .015 and we do see some signficant Pr(>F). With this, we can reeject the null hypothesis that $H_{0}$ that all $\beta$ = 0.
+
+Checking  assumptions:  
+
+**Homoscedasticity** - The residuals vs fitted graph dont appear to be completly constant. Towards the higher end of the fitted values, we dont see the same distribution around the x=0 as the other values. (Same as the prior chart with only fiber as a variable)  
+**residual normality** -  the QQ plot does appear to show that the residuals are not perfectly normally distributed towards the top ends.
+**multicollinearity** -  Plotting a simple scatter of fiber vs alcohol, we do not see obvious signs of multicollinearity.  
+The **scale location** plot tells the same story as the residual plot, but something interesting is that looking at the red line, the magnitude of the **residuals** are fairly flat across all X's.  
+**levearage:**  We dont see any outliers as all the points are within the cooks distance line.  
+
+```{r}
+
+alcoholdata$fxd0 <- alcoholdata$Fiber*alcoholdata$Alcohol_d0
+alcoholdata$fxd1 <- alcoholdata$Fiber*alcoholdata$Alcohol_d1
+alcoholdata$fxd2 <- alcoholdata$Fiber*alcoholdata$Alcohol_d2
+
+model3 <- lm(Cholesterol~Fiber + Alcohol_d1 + Alcohol_d2 + fxd1 + fxd2, data=alcoholdata)
+
+
+alcoholdata$unequalslopefitted <- model3$fitted.values
+```
+
+```{r}
+summary(model3)
+anova(model3)
+plot(model3)
+ggplot(data=alcoholdata, aes(x=Fiber, 
+                      y=unequalslopefitted, 
+                      color = factor(alcoholgroup)))+geom_point() + labs(title = "fiber vs cholestorol with interaction")
+```
+
+
+##### 6)	You should be aware that the models of Task 4) and Task 5) are nested.   Which model is the full and which one is the reduced model?   Write out the null and alternative hypotheses for the nested F-test in this situation to determine if the slopes are unequal.  Use the ANOVA tables from those two models you fit previously to compute the F-statistic for a nested F-test using Full and Reduced models.  Conduct and interpret the nested hypothesis test.  Are there unequal slopes?   Discuss the findings.   
+***  
+The full model is the model with the interactions and the reduced model is the model without the interactions.  
+
+Nested F test:  
+$H_{0}: \beta_{4} = \beta_{5}=0$  
+$H_{a}: \beta_4 \neq 0$ or $\beta_5 \neq 0$ 
+
+The nested F test tells us that the betas for the interactions are not signficant, so we can't reject the null hypthesis that the slope is 0.  This means that we can't definitively say that there is a relationship between the interactions to cholestorol.  And since we arent rejecting the null hypothesis, we can't say that the slopes are different.
+
+```{r}
+anova(model2, model3)
+```
+##### 7)	Now that you’ve been exposed to these modeling techniques, it is time for you to use them in practice.  Let’s examine more of the NutritionStudy data.   Use the above practiced techniques to determine if SMOKE, VITAMINS, or GENDER interacts with the FIBER variable and influences the amount of CHOLESTEROL.  Formulate hypotheses, construct essential variables (as necessary), conduct the analysis and report on the results.   Which categorical variables are most predictive of CHOLESTEROL, in conjunction with FIBER.  
+***  
+creating dummies for smoke, vitamins, and gender
+```{r}
+data$Smoke_d0 <- ifelse(data$Smoke=="No",1,0)
+data$Smoke_d1 <- ifelse(data$Smoke=="Yes",1,0)
+
+data$VitaminUse_d0 <- ifelse(data$VitaminUse=="No",1,0)
+data$VitaminUse_d1 <- ifelse(data$VitaminUse=="Occasional",1,0)
+data$VitaminUse_d2 <- ifelse(data$VitaminUse=="Regular",1,0)
+
+data$Gender_d0 <- ifelse(data$Gender=="Female",1,0)
+data$Gender_d1 <- ifelse(data$Gender=="Male",1,0)
+
+#Interactions
+data$fxsmoked0 <- data$Fiber*data$Smoke_d0
+data$fxsmoked1 <- data$Fiber*data$Smoke_d1
+
+data$fxVitaminUsed0 <- data$Fiber*data$VitaminUse_d0
+data$fxVitaminUsed1 <- data$Fiber*data$VitaminUse_d1
+data$fxVitaminUsed2 <- data$Fiber*data$VitaminUse_d2
+
+data$fxGenderd0 <- data$Fiber*data$Gender_d0
+data$fxGenderd1 <- data$Fiber*data$Gender_d1
+```
+
+
+
+Smoke and Fiber.
+
+```{r}
+smokedata <- data
+smokedata$smokegroup <- ifelse(smokedata$Smoke_d0==1,1,2)
+```
+
+
+The Equation for this model is as follows:  
+Full Model: $Y=179.184+4.455_{1}+63.059X_{2}-1.597X_{3}$.  
+Reduced Model: $181.274 +4.296X_{1}+45.738X_2$.  
+
+**Interpretation:**  
+For the Full model, when all betas are 0, the cholestorol is 179.184.  
+When smoke = 'No', then cholestorol will be increased by 4.455 for every unit of fiber increase  
+When smoke = 'Yes',  cholestorol will be the same as when smoke = 'No', but 63.059 will be added to the total cholestorol.  
+With the interaction of fiber and smoke, for smoke = 'Yes', instead of 4.455 for every unit increase,   the unit increase will be (4.455-1.597) = 2.858.
+
+The $R^2$ for both models are low, (2.8 and 3.1 for full and reduced models), so they do not explain all the variance.  The p-values are still insignficant except for fiber, so we dont reject the null hypothesis that the betas are equal to 0.  This also means that the relationship we see between smoke and cholestorol may be due to chance.
+
+
+
+
+```{r}
+smoke_full <-lm(Cholesterol~Fiber + Smoke_d1 + fxsmoked1, data=smokedata)
+smokedata$fitted.full <- smoke_full$fitted.values
+summary(smoke_full)
+
+smoke_reduced <-lm(Cholesterol~Fiber + Smoke_d1, data=smokedata)
+smokedata$fitted.reduced <- smoke_reduced$fitted.values
+summary(smoke_reduced)
+
+```
+
+F tests an Nested F test:  
+$H_{0}: \beta_{1} = \beta_{2} = \beta_{3} =0$  
+$H_{a}:$  at least one $\beta_{i} \neq 0$  
+Our F test for both full and reduced model is telling us that again, fiber is significant, and smoke is significant at 3.5%
+
+For the Nested F test:  
+$H_{0}: \beta_{3}=0$  
+$H_{a}: \beta_3  \neq 0$ 
+
+We are not able to reject the null hypothesis with the F statistic.
+
+Using all the above info, it appears that 1)  Fiber is a significant variable, 2) The F tests is telling us we are  able to reject the null hypothesis for smoke (excluding the interaction), and 3)the interaction term is also not significant, so we can potentially omit this  interaction variable in the model.  This is also telling us that the unequal slopes may not be real.  
+
+
+```{r}
+anova(smoke_full)
+anova(smoke_reduced)
+anova(smoke_full, smoke_reduced)
+```
+
+
+
+Checking  assumptions:  
+
+**Homoscedasticity** - The residuals do look random, but it's not constant throughout all of the fitted values. towards the higher end of the fitted values, it is not longer spread around the 0 mark.  
+**residual normality** -  the QQ plot does appear to show that the residuals are not perfectly normally distributed towards the top ends.  
+**The scale location** plot tells the same story as the residual plot: random residuals, but the standarized residuals seem to increase just a tad towards the higher ends of the fitted values  
+**levearage**:  We dont see any outliers as all the points are within the cooks distance line.   
+
+In terms of goodness of it, I feel this is not a perfect dataset that satisifies all linear regression assumptions, but it's not terrible.  Any issues with the prediction result would be more caused by the variable selection than assumption violations.
+
+
+```{r}
+plot(data$Fiber,data$Smoke)
+ggplot(data=smokedata, aes(x=Fiber, 
+                      y=fitted.reduced, 
+                      color = factor(smokegroup)))+geom_point() + labs(title = "smoke and fiber")
+
+
+ggplot(data=smokedata, aes(x=Fiber, 
+                      y=fitted.full, 
+                      color = factor(smokegroup)))+geom_point() + labs(title = "smoke and fiber with interactions")
+plot(smoke_full)
+plot(smoke_reduced)
+
+
+```
+
+fiber and vitamins 
+
+```{r}
+vitamindata <- data
+vitamindata$vitamingroup <- ifelse(vitamindata$VitaminUse_d0==1,1,ifelse(vitamindata$VitaminUse_d1==1,2,3))
+```
+
+The Equation for this model is as follows:  
+Full Model: $Y=208.821+3.111X_1 -19.453X_2 -29.942X_3 + 1.300X_4 + 1.1196X_5$.  
+Reduced Model: $198.745 + 3.940X_1 -3.401X_2 - 14.947X_3$.  
+
+**Interpretation:**  
+For the Full model, when all betas are 0, the cholestorol is 208.821  
+When vitaminuse  = 'No', then cholestorol will be increased by 3.111 for every unit of fiber increase.  
+When vitaminuse = 'occasional',  cholestorol will be the same as when vitaminUse = 'No', but -19.453 will be added to the total cholestorol.  
+When vitaminuse = 'regular',  cholestorol will be the same as when vitaminUse = 'No', but -29.942 will be added to the total cholestorol.  
+
+The Reduced model is interpreted similary where we just shift the fiber coefficient by the vitamin coefficient, minus the interaction components
+
+**Interaction terms**
+With the interaction of fiber and VitaminUse, for vitaminUse = 'Occasional', instead of 3.111 for every unit increase,  the unit increase will be (3.111+1.300) = 4.411
+
+With the interaction of fiber and vitumanUse, for vitaminUse = 'Regular', instead of 3.111 for every unit increase,   the unit increase will be (3.111+1.1196) = 4.307.  
+
+The is all assuming basis of interpretation for vitaminUse= "No"
+
+The $R^2$ for both models are low, (.01 and .016 for full and reduced models), so they do not explain all the variance.  The p-values are still insignficant except for fiber, so we dont reject the null hypothesis that the betas are equal to 0.  This also means that the relationship we see between vitamin and cholestorol may be due to chance.
+
+
+```{r}
+vitamin_full <-lm(Cholesterol~Fiber + VitaminUse_d1 + VitaminUse_d2 + fxVitaminUsed1 + fxVitaminUsed2, data=vitamindata)
+vitamindata$fitted.full <- vitamin_full$fitted.values
+summary(vitamin_full)
+
+vitamin_reduced <-lm(Cholesterol~Fiber + VitaminUse_d1+VitaminUse_d2, data=vitamindata)
+vitamindata$fitted.reduced <- vitamin_reduced$fitted.values
+summary(vitamin_reduced)
+
+
+```
+
+F tests an Nested F test:  
+$H_{0}: \beta_{1} = \beta_{2} = \beta_{3} = \beta_4 = \beta_5 = 0$  
+$H_{a}:$  at least one $\beta_{i} \neq 0$  
+Our F test for both full and reduced model is telling us that again, fiber is significant, but the remaing variables are not. 
+
+For the Nested F test:  
+$H_{0}: \beta_{3} = \beta_4=0$
+$H_{a}: \beta_i  \neq 0$ 
+
+We are not able to reject the null hypothesis with the F statistic.
+
+Using all the above info, it appears that 1)  Fiber is a significant variable, 2) The F tests is telling us we are not able to reject the null hypothesis, so it's possible that any relationship generated by this model we see to cholestorol is due to chance, and 3)the interaction term is also not significant, so we can potentially omit this variable in the model.  This is also telling us that the unequal slopes may not be real. 
+
+
+```{r}
+anova(vitamin_full)
+anova(vitamin_reduced)
+
+anova(vitamin_full,vitamin_reduced)
+```
+
+Checking  assumptions:  
+
+**Homoscedasticity** - The residuals do look random, but it's not constant throughout all of the fitted values. towards the higher end of the fitted values, it is not longer spread around the 0 mark.  
+**residual normality** -  the QQ plot does appear to show that the residuals are not perfectly normally distributed towards the top ends.
+**The scale location** plot tells the same story as the residual plot: random residuals, but the standarized residuals seem to increase just a tad towards the higher ends of the fitted values
+**levearage:**  We dont see any outliers as all the points are within the cooks distance line.  
+
+In terms of goodness of it, I feel this is not a perfect dataset that satisifies all linear regression assumptions, but it's not terrible.  Any issues with the prediction result would be more caused by the variable selection than assumption violations.
+
+```{r}
+
+plot(vitamin_full)
+
+ggplot(data=vitamindata, aes(x=Fiber, 
+                      y=fitted.reduced, 
+                      color = factor(vitamingroup)))+geom_point() + labs(title = "vitamins and fiber")
+
+
+ggplot(data=vitamindata, aes(x=Fiber, 
+                      y=fitted.full, 
+                      color = factor(vitamingroup)))+geom_point() + labs(title = "vitamins and fiber with interactions")
+
+```
+
+Fiber and Gender
+
+```{r}
+Genderdata <- data
+Genderdata$Gendergroup <- ifelse(Genderdata$Gender_d0==0,1,2)
+```
+
+
+fiber and gender  
+The Equation for this model is as follows:  
+
+Full Model: $Y=162.359+5.273X_1 +311.514X_2 -16.138X_3$.  
+Reduced Model: $184.490 + 3.529X_1 +96.294X_2$.  
+
+**Interpretation:**  
+For the Full model, when all betas are 0, the cholestorol is 162.359  
+When Gender  = 'Female', then cholestorol will be increased by 5.273 for every unit of fiber increase.
+When Gender = 'Male',  cholestorol will be the same as when Gender = 'Female', but 311.514 will be added to the total cholestorol.  
+
+The Reduced model is interpreted similary where we just shift the fiber coefficient by the gender coefficient, minus the interaction components  
+
+**Interaction terms**
+With the interaction of fiber and gender, for gender = 'Male', instead of 5.273 for every unit increase,   the unit increase will be (5.273-16.138)= -10.865  
+
+
+The is all assuming basis of interpretation for Gender = "Female"  
+
+The $R^2$ for both models are low, (.11 and .07 for full and reduced models), so they do not explain all the variance.  The p-values are still insignficant except for fiber, so we dont reject the null hypothesis that the betas are equal to 0.  This also means that the relationship we see between vitamin and cholestorol may be due to chance.
+
+```{r}
+Gender_full <-lm(Cholesterol~Fiber + Gender_d1 + fxGenderd1, data=Genderdata)
+Genderdata$fitted.full <- Gender_full$fitted.values
+summary(Gender_full)
+
+Gender_reduced <-lm(Cholesterol~Fiber + Gender_d1, data=Genderdata)
+Genderdata$fitted.reduced <- Gender_reduced$fitted.values
+summary(Gender_reduced)
+```
+
+F tests an Nested F test:  
+$H_{0}: \beta_{1} = \beta_{2} = \beta_{3} = 0$  
+$H_{a}:$at least one  $\beta_{i} \neq 0$  
+Our F test for both full and reduced model is telling us that again, fiber is significant gender is also significant  
+
+For the Nested F test:  
+$H_{0}: \beta_{2} = \beta_3=0$  
+$H_{a}: \beta_2  \neq 0$ or $\beta_3$  
+
+We are  able to reject the null hypothesis with the F statistic.  
+
+Using all the above info, it appears that 1)   Fiber, gender, and the interaction terms is significant, 2) The F tests is telling us we are  able to reject the null hypothesis, so we can say that gender is significant in this model, and also, the interaction is does truly yield unequal slopes.
+```{r}
+anova(Gender_full, Gender_reduced)
+```
+
+
+Checking  assumptions:  
+
+**Homoscedasticity** - The residuals do look random, but it's not constant throughout all of the fitted values. towards the higher end of the fitted values, it is not longer spread around the 0 mark.  
+**residual normality** -  the QQ plot does appear to show that the residuals are not perfectly normally distributed towards the top ends.  
+**The scale location** plot tells the same story as the residual plot: random residuals, but the standarized residuals seem to increase just a tad towards the higher ends of the fitted values  
+**levearage:**  We dont see any outliers as all the points are within the cooks distance line.  
+
+In terms of goodness of it, I feel this is not a perfect dataset that satisifies all linear regression assumptions, but it's not terrible.  Any issues with the prediction result would be more caused by the variable selection than assumption violations.  
+```{r}
+
+
+plot(Gender_full)
+ggplot(data=Genderdata, aes(x=Fiber, 
+                      y=fitted.reduced, 
+                      color = factor(Gendergroup)))+geom_point() + labs(title= "fiber  vs gender")
+
+
+ggplot(data=Genderdata, aes(x=Fiber, 
+                      y=fitted.full, 
+                      color = factor(Gendergroup)))+geom_point()  + labs(title = "fiber vs gender with interactions")
+
+```
+
+**Comparison of all variables**  
+**For alcohol:** 
+Without interactions, all alcohol groupings are insignificant.  P value for F statistic is .015  $R^2$ is 2.3.  
+With interactions, all alcohol groupings are insignificant.  p value for F statistic is .016.  $R^2$ is 2.8.  
+Nested F test:  we fail to reject the interaction variable.
+
+**For smoke**  
+Without interactions, all variables are significant.   $R^2$ for smoke is .031.  p value for F statistic is .0025.  
+With interactions,  all smoke variables are not significant. $R^2$ is .028.  p value for F statistic is .007  
+Nested F test: we fail to reject the interaction variable.
+
+**for vitaminUse**  
+Without interactions, all vitamin variables are not significant.  $R^2$ is 1.6%.  P value for F statistic is .1338  
+With interactions, all vitamin variables are not significant. $R^2$ is 1.6. P value for F statistic is .04  
+Nested F test:  We fail to reject the interaction variable.  
+
+**For Gender**  
+Without interaction, all variables are significant. $R^2$ is .079.  P value for F statistic is very low.  
+With interaction, all variables are significant  $R^2$ is 11.8%.  P value for the F statistic is extremely low.  
+Nested F test:  the p value for the F statistic is very low.  
+
+Based on the 4 comparisons, I feel gender is the best predictor for fiber.  It has the highest Correlation coefficient, so we know it explains the most variance.  all the variables came out to be signficant, so we know that any relationship to fiber coming out of gender is  probabilistically not due to chance.  The F test which assesses the overall model fit is also significant, so we are reassured of the performance of the model.  Finally, the nested F test tells us the interaction variable is a good predictor, so we can say that each gender group is different from each other.  
+
+
+
+##### 8)	Please write a reflection on your experiences.  
+***  
+I realized that for the prior assignments, I wasn't methodlogical in assessing my models, so for this assignment and future ones for the rest of the term, I've decided to take more effort in addressing each piece of the assumptions.  Because of this,  I started to realize the "tediousness" of model validation.  
+One aspect of the assupmotions that I'm still not comfortable in is looking at the residual vs fitted plot.  The first one of Fiber vs cholestorol made me ask myself a lot of questions:  It looks random, but it's not "constant"  across all X's.  Does that disqualify "constant" variance?  It's not a perfect represenation of "constant" variance, but its also not a perfect represenation of something that violates constant variance (i,e "fanning" shape).  
+With the new tools we have addressing unequal slopes,  I do see the benefit of using this knowledge, but I think the more tests we have, the more complexity and care we have to take in addressing each component.  I feel like as we do more of these assignments, it may be good to have a "checklist" of things to look out for (i,e 1. address assumptions, 2. look at scatters, 3. look at interactions, 4. look at un equal slopes, 5. look at F tests etc etc).  
+
+Thinking about unequal slopes, I do think about how to use this in my workplace.  The most difficult part is knowing which interactions to test (I do wonder, is there a scoring procedure to assess which interactions have the most difference in impact (before we finalize the selection)).  Then, in terms of interpreting the unequal slopes, the visual is a good way to show how different the groups are.
+
+##### 9)	Extra Credit:  Feel free to explore models that have other continuous variables, as well as interactions of categorical variables.  The more you do, the more extra credit you can accumulate.
+
+Unfortunately, life got the best of me this week, so I dont have time to try other variables, but if given the time, I would probably try a couple things:  
+1.  figure out some sort of loop to loop through a few more variables.  
+2.  maybe try the interactions of 2 interactions?  
+
+
+
+
