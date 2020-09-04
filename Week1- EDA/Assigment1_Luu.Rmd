@@ -1,0 +1,539 @@
+---
+title: "Assignment1_Luu"
+author: "Hon Luu"
+date: "4/8/2020"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r cars, message = FALSE, warning = FALSE}
+library(ggplot2)
+library(ggcorrplot)
+library(dplyr)
+library(car)
+library(psych)
+library(gridExtra)
+library(vtable)
+```
+
+
+Read data
+```{r pressure}
+data <- read.csv(file="ames_housing_data.csv",head=TRUE,sep=",")
+```
+
+
+
+#Section 1: Sample Definition
+
+For the first step in our exploratory data analysis, we take a closer look at our data and try to understand whether the sample we are working with is appropriate for our analysis.  
+
+For this project, our ask is to eventually predict housing prices for a "typical" home in Ames, Iowa. While typical means something different for everyone, there are obvious things that can be teased out that may be inappropriate and can be removed.
+Inspecting the data dictionary, a few key variables stand out.  
+
+The Zoning variable includes codes for non-residential homes (A - agriculture, C - Commercial, I - industrial).  As we are predicting prices for a 'typical' home, we should remove these. This makes up about 29 observations.
+
+The Sale condition also indicates the data includes "foreclosure" homes (Abnorml).  As these homes are typically bank owned and marked down, they do not represent "typical" house prices.  These can also be removed.  This represents 190 observations.
+
+All the other variables pertain to residential homes and can be kept.  While there may be "outliers", such as price that we haven't investigated yet,I'm keeping those for now at this step as we do not know if they are outliers or not. 
+
+In total, including the intersection of the above observations that are not typical, we lose 208 observations.
+Of the 2930 original observatons, we now have 2722, so we lost under 8% of our dataset. 
+
+
+```{r}
+#Checking frequency of each zone.
+table(data$Zoning)
+table(data$SaleCondition)
+
+#removing the zones that should not be included in the anlaysis.
+data <- data %>% filter(Zoning %in% c("RL", "RH", "FV", "RM", "RP"))
+data <- data %>% filter(SaleCondition %in% c('Normal', 'AdjLand', 'Alloca', 'Family', 'Partial'))
+
+```
+#Section 2. DATA QUALITY CHECK
+
+This step of our EDA focuses in to the data itself and checks for any errors.  We inspect 20 independent variables at this step for any errors.
+
+The Variables chosen:  
+Y - Sale Price  
+X - nominal - subclass, zoning, neighbordhood, foundation, CentralAir  
+X - continuous - BsmtFin Poolarea MiscVal lotfrontage 1stFlrSf  
+X - Oridinal - LotShape, Utilities, ExterQual, Electrical, FireplaceQu  
+X - discrete -Yrsold, YrBuilt, TotRmsAbvGrd, Fireplaces, GarageCars  
+
+```{r}
+#combining the 20 variables
+subdata <- data[,c("SalePrice", 
+                   "SubClass", 
+                   "Zoning",
+                   "Neighborhood",
+                   "Foundation",
+                   "CentralAir",
+                   "BsmtFinType1",
+                   "PoolArea",
+                   "MiscVal",
+                   "LotFrontage",
+                   "FirstFlrSF",
+                   "LotShape",
+                   "Utilities",
+                   "ExterQual",
+                   "Electrical",
+                   "FireplaceQu",
+                   "YrSold",
+                   "YearBuilt",
+                   "TotRmsAbvGrd",
+                   "Fireplaces",
+                   "GarageCars")]
+print(vtable(subdata))
+```
+
+
+Our first step is to look for 'N/A's in our variables.  The summary command gives a broad overview of our data which also includes N/A's.
+BsmtFinType1 has about 79 N/As.  the N/A's could be missing values because they were not captured, or they could be missing because houses without a basement would be coded as 'N/A's (as stated in the dictionary). 
+A quick confirmation  would be to compare BsmtFinType1 with BsmtCond to see if there are any intersection of an existing quality with a "No Basement". Our investigation shows that the NA for BsmtFinType1 appears valid. 
+
+The same logic applies to FireplaceQu where the NA's are valid.
+
+LotFrontage appears to have 490 missing values.  As this is a continuous variable that represents feet between street and property,  this could be an error that may require imputation.
+
+
+The summary command also tells us the average value of the variables.  One thing to notice is that the average sale price is $180,000 while the median value is 160,000.  As these 2 values are relatively close,  this tells me that there aren't many high value homes that is skewing the mean value up.  
+```{r}
+
+#Checking for N/As.
+sapply(X = subdata, FUN = function(x) sum(is.na(x)))
+
+#summary of all data
+summary(subdata)
+table(data$BsmtFinType1,data$BsmtCond)
+table(data$FireplaceQu,data$Fireplaces)
+
+```
+
+
+Next we run a loop to plot a histogram or a barplot for the continuous and categorical variables.  This gives us a decent view of the distribution of each variable.  For the most part,  there is an imbalance across most variables, but nothing stands out as an obvious error. For example, there are some extremely high priced homes, but those are not isolated.
+
+```{r  message = FALSE,fig.width=5, fig.height=5}
+options(scipen = 999)
+#Histogram and bar charts for distriubtion
+for(i in 1:length(subdata)){
+  if (class(subdata[,i]) == "integer"){
+    print(
+      ggplot(subdata, aes(x=subdata[,i])) + geom_histogram(fill = "purple") + theme_classic() + 
+      labs(x=colnames(subdata[i]), 
+           y="Frequency",title = paste0("Frequency of"," ",colnames(subdata[i])))) 
+      
+  } else {
+    print(
+      ggplot(subdata, aes(x=subdata[,i])) + geom_bar(fill = "purple") + theme_classic() + theme(axis.text.x = element_text(angle = 45, hjust=1))+
+      labs(x=colnames(subdata[i]), 
+           y="Frequency",title = paste0("Frequency of"," ",colnames(subdata[i])))) 
+  }
+}
+```
+
+We can also pick out a certain variable that pops to us and check it's distribution  across the Sale price. For example, The top 5 neighborhood ( in frequency counts) will most likely have an effect on the overall average.  We can overlay it's price distribution to see what it shows.
+
+By doing this,  what we see that N. Ames has a distribution centered between 100,000-200,000 while Somerst homes tend to be more expensive (or more uniformly distributed across the higher sale price)
+```{r}
+Top5Neighborhood <- subdata %>% 
+  filter(Neighborhood %in%  c('NAmes', 'CollgCr', 'OldTown', 'Somerst', 'Edwards'))
+
+ggplot(Top5Neighborhood, aes(x=SalePrice, fill = Neighborhood)) + 
+  geom_histogram(color = "black", bins = 50) + theme_classic() + 
+  theme(axis.text.x = element_text(angle = 45, hjust=1)) + 
+  labs(x="Neighborhood",
+       y="Frequency",
+       title = "Sale Price disstribution of top 5 Neighborhood")
+```
+
+A boxplot also shows us where each data point lies relative to sale price and tells us about potential outliers. The boxplot gives us a glimpse of any outliers, and there are quite a few.  The distinction between these outliers is that they may be outliers in the sense of it should not be included as a 'typical' home, as opposed to calling them clerical error.
+
+The boxplot also lets us easily compare the ranges of each grouping. For example, we can see which neighbordhood has the highest and lowest median prices.  An interesting observation is that Veenker has one of the higher median prices and least # of outliers.  This potentially tells us that the this neighborhood generally has high priced homes.
+
+
+```{r message = FALSE,fig.width=5, fig.height=5}
+for(i in 1:length(subdata)){
+  if (class(subdata[,i]) == "integer"){
+    next
+  } else {
+    print(
+      ggplot(subdata, aes(x=subdata[,i], y=SalePrice)) + geom_violin(fill = "red") + geom_boxplot(fill = "purple") + theme_classic() + theme(axis.text.x = element_text(angle = 45, hjust=1))+
+      labs(x=colnames(subdata[i]), 
+           y="Sale Price",title = paste0("Boxplot of"," ",colnames(subdata[i])))) 
+  }
+}
+```
+
+A scatterplot is also created to see any bivariate and individual observations that may lie outside of 'typical'.  A review of the scatter plot leads me to think about a few things:
+
+A 'typical' home can be thought of as a typical home, from the entire sample, or a typical home given a certain variable.  
+For example, most homes do not have a pool.  Should we be excluding the ones that do have a pool?  if we look at homes without a pool, there are only a couple that are over $600,000.  Should we be considering these as typical in the homes with a pool?
+
+There is a couple points that have a first floor square footage of > 5000, while everyone else clusters between 1000-2000 square feet.  it may be worthwhile to remove  the homes greater than 5000 sqft. 
+
+Same concept with Lotfrontage where there are a couple points > 300, while the majority is less than that.
+
+```{r message = FALSE,fig.width=5, fig.height=5}
+for(i in 1:length(subdata)){
+    print(
+      ggplot(subdata, aes(x=subdata[,i], y=SalePrice)) + geom_point(col = "purple") + theme_classic() + theme(axis.text.x = element_text(angle = 45, hjust=1))+
+      labs(x=colnames(subdata[i]), 
+           y="Sale Price",title = paste0("Scatterplot of"," ",colnames(subdata[i])))) 
+}
+
+
+```
+
+
+With the variables chosen, one last check I did was to compare the Year sold vs Year built.  There is one observation where the year sold is before the year built.  While it is possible that this person purchased the home prior it being built, there is only 1 instance of that.  this could be an error and the year sold should be adjusted to be equal to year built.
+```{r}
+
+
+#checking for wierd clerical errors
+#Sold vs Built.  sold should be after built
+subdata$soldVsBuilt <- subdata$YrSold - subdata$YearBuilt
+subset(subdata, soldVsBuilt < 0)
+
+
+
+```
+
+Our data quality check can also include checking for normality.  Normality is important  as many models and statistical techniques assume the normal distribution. If normality is not achieved,  certain statistical tests will not be as robust, and predictive models may not perform as well. The way to overcome this would be to use non-parametric techniques to look into transformation to make the variables more 'normal'.
+
+For the most part, all of our continuous variable do deviate from the normal distribution. This tells us that there may be opportunity for potential transformation of the variable to get it closer to a normal distribution.  We would also want to factor this into consideration when doing statistical tests.
+
+```{r Message = FALSE,fig.width=5, fig.height=5}
+for(i in 1:length(subdata)){
+  if (class(subdata[,i]) == "integer"){
+    print(
+      ggplot(subdata, aes(sample=subdata[,i])) + 
+        stat_qq(col = "purple") + 
+        stat_qq_line(col = "red") + theme_classic() + theme(axis.text.x = element_text(angle = 45, hjust=1))+
+      labs(x="theoritical", 
+           y="sample",title = paste0("Q-Q to test for Normality of "," ",colnames(subdata[i])))) 
+  } else {
+    next
+  }
+}
+```
+
+
+#4 INITIAL EXPLORATORY DATA ANALYSIS
+
+For the actual Initial Exploratory data analysis, we pick 10 variables and focus on their relation with others and in particular the response variable.
+
+The 10 variables chosen are  
+Y = SALE PRICE  
+X - nominal - subclass, zoning, neighbordhood  
+X - continuous - BsmtFin Poolarea  
+X - Oridinal - LotShape, Utilities  
+X - discrete -Yrsold, YrBuilt, TotRmsAbvGrd, Fireplaces  
+```{r}
+subdata2 <- data[,c("SalePrice", 
+                   "SubClass", 
+                   "Zoning",
+                   "Neighborhood",
+                   "BsmtFinType1",
+                   "PoolArea",
+                   "LotShape",
+                   "Utilities",
+                   "YearBuilt",
+                   "TotRmsAbvGrd",
+                   "Fireplaces"
+                   )]
+
+print(vtable(subdata2))
+
+```
+
+We split up our data into 2 sets (numeric and categorical) for easier exploration.
+
+```{r}
+numeric_subdata2 <- subdata2[,c("SalePrice","SubClass", "PoolArea", "YearBuilt", "TotRmsAbvGrd", "Fireplaces")]
+print(vtable(numeric_subdata2))
+cat_subdata2 <- subdata2[,c("SalePrice","Zoning","Neighborhood", "BsmtFinType1", "LotShape", "Utilities")]
+print(vtable(cat_subdata2))
+```
+
+#4A INITIAL EXPLORATORY DATA ANALYSIS - NUMERIC VARIABLES
+We first look at the correlation between the numeric variables.  A high correlation tells us the relationship between each variable and can also lead us to potentially drop one when we perform our regression model.
+
+For correlation, we first check the assumptions that usually need to be satisfied:  
+1. variables are coninuous (this is confirmed)  
+2. No outliers  as defined as +/- 3.29 deviation from the mean.  
+3. Linearity.  A straightline relationship.  
+
+A scatter plot between the dependent and the independent variable do show somewhat of a linear relationship, but at the tail end of some segments,  data becomes sparse. Even with limited data,  you do see a relationship.
+visually, the variable that has the most data and looks most credible is year built vs price, where the newer the home, the more expensive the home is.
+
+An interesting note is to also look at the confidence interval of this relationship.  While you see a relationship between Pool area and price,  the confidence interval band is wide and can potentially  points down within.  Compared this to year built,  you see a very confident and direct relationship with the tighter band
+
+```{r Message = FALSE,fig.width=5, fig.height=5}
+for(i in 1:length(numeric_subdata2)){
+    print(
+      ggplot(numeric_subdata2, aes(x=numeric_subdata2[,i], y=SalePrice)) + geom_point(col = "purple") + theme_classic() + geom_smooth(method='lm', fill = "red") +
+        theme(axis.text.x = element_text(angle = 45, hjust=1))+
+        labs(x=colnames(numeric_subdata2[i]), 
+           y="Sale Price",title = paste0("Scatter plot with smoother of"," ",colnames(subdata[i])))) 
+}
+```
+
+We look at the scatter plot between interactions of the independent variables and do not notice an obvious linear relationship.  Most of the scatter smooth line is flat (aside from the ones involving price).  This is good to keep in mind as we build out our correllogram and judge it's correlation value. These charts are in the appendix for seperate viewing.
+
+
+A quick look at the standard deviation presents the following to tell us how far we deviate from the mean.
+
+```{r}
+describe(numeric_subdata2, skew=FALSE)
+
+```
+
+With the assumptions completed, we now look at our correlogram.  
+Initial look at the correlogram follows intution.  There is a positive correlation to sale price based on Year built, # of rooms above ground, and # of fireplaces. This makes sense new homes are more expensive,  multiroom houses cost more, and a house with a fireplace would cost more than a house without.  This is in line with the prior scatterplots.
+There is a couple negative correlation for subclass, which says the higher the subclass, the lower the sale price.  This also makes sense as the data dictionary points out that the lower subclass are the single family home while the higher subclass are duplexes and conversions.
+
+
+```{r}
+corr <-cor(numeric_subdata2)
+ggcorrplot(corr, hc.order=TRUE,
+           type ="lower",
+           lab = TRUE,
+           lab_size=3,
+           method = "circle",
+           colors = c("red", "white", "purple"),
+           title = "Correlogram of Housing prices",
+           ggtheme = theme_classic)
+```
+#4B INITIAL EXPLORATORY DATA ANALYSIS - CATEGORICAL VARIABLES  
+For categorical variables,  we are doing a similar type of analysis.  For a categorical to categorical comparison,  we would use the chi square test to test independence. However, an initial run of the chi.square shows us a warning as the sample size is small.  In this case, we use the Fisher exact test.
+
+Fisher test shows the following interactions with a p-value of >.05:  LotShape/Utilities, BasementFinishType/Utilities, Neighborhood/Utilities.  
+For the rest of the combinations, we would reject the NULL hypothesis that they are independent from each other (I.e, they may be dependent).  For the 3 pairs listed above,  we fail to reject that they are independent.  This again, can potentially follow intution.  Utilities naturally may not have any relationship with the type of house that one would purchase.
+
+
+```{r}
+#run chi.sq on all vcategorical variables.
+
+#Chi Square test
+chisq.test(cat_subdata2$Zoning,cat_subdata2$Neighborhood)
+chisq.test(cat_subdata2$Zoning,cat_subdata2$BsmtFinType1)
+chisq.test(cat_subdata2$Zoning,cat_subdata2$LotShape)
+chisq.test(cat_subdata2$Zoning,cat_subdata2$Utilities)
+
+chisq.test(cat_subdata2$Neighborhood,cat_subdata2$BsmtFinType1)
+chisq.test(cat_subdata2$Neighborhood,cat_subdata2$LotShape)
+chisq.test(cat_subdata2$Neighborhood,cat_subdata2$Utilities)
+
+chisq.test(cat_subdata2$BsmtFinType1,cat_subdata2$LotShape)
+chisq.test(cat_subdata2$BsmtFinType1,cat_subdata2$Utilities)
+
+chisq.test(cat_subdata2$LotShape,cat_subdata2$Utilities)
+
+#Fisher Test
+fisher.test(cat_subdata2$Zoning,cat_subdata2$Neighborhood, simulate.p.value = TRUE)
+fisher.test(cat_subdata2$Zoning,cat_subdata2$BsmtFinType1,simulate.p.value = TRUE)
+fisher.test(cat_subdata2$Zoning,cat_subdata2$LotShape,simulate.p.value = TRUE)
+fisher.test(cat_subdata2$Zoning,cat_subdata2$Utilities,simulate.p.value = TRUE)
+
+fisher.test(cat_subdata2$Neighborhood,cat_subdata2$BsmtFinType1,simulate.p.value = TRUE)
+fisher.test(cat_subdata2$Neighborhood,cat_subdata2$LotShape,simulate.p.value = TRUE)
+fisher.test(cat_subdata2$Neighborhood,cat_subdata2$Utilities,simulate.p.value = TRUE)
+
+fisher.test(cat_subdata2$BsmtFinType1,cat_subdata2$LotShape,simulate.p.value = TRUE)
+fisher.test(cat_subdata2$BsmtFinType1,cat_subdata2$Utilities,simulate.p.value = TRUE)
+
+fisher.test(cat_subdata2$LotShape,cat_subdata2$Utilities,simulate.p.value = TRUE)
+
+
+```
+#4C INITIAL EXPLORATORY DATA ANALYSIS - CATEGORICAL TO NUMERIC VARIABLE
+
+Our third test of correlation/association that we would perform is the categorical variables against the dependent Y variable (sale price).
+
+For this test, we would use the Analysis of variance.  However, we would also want to check for the assumptions first.  
+ANOVA assumptions:  
+1. common variance
+
+For common variance, we can run the anova and visually inspect the variance using residual vs fitted, or we can also run the levene test. Here, we will do both.
+
+The results of the residual vs fitted shows the variance do not revolve around 0 as you move across grouping.  See the Neighborhood as an example.  As you move towards the right on the x-axis, the points become more spreadout. potentially, the only one that may be independent is utilities.  The Levene's test confirms this as utilities is the only one where you would not reject the Null hypothesis.
+
+This is consistent with the prior analysis above
+
+```{r}
+Anova_Neighborhood_Price <-cat_subdata2[,c("SalePrice","Neighborhood")]
+Anova_Neighborhood_Price.aov <- aov(SalePrice~Neighborhood, data=Anova_Neighborhood_Price)
+
+Anova_Zone_Price <-cat_subdata2[,c("SalePrice","Zoning")]
+Anova_Zone_Price.aov <- aov(SalePrice~Zoning, data=Anova_Zone_Price)
+
+Anova_BsmtFinType1_Price <-cat_subdata2[,c("SalePrice","BsmtFinType1")]
+Anova_BsmtFinType1_Price.aov <- aov(SalePrice~BsmtFinType1, data=Anova_BsmtFinType1_Price)
+
+Anova_LotShape_Price <-cat_subdata2[,c("SalePrice","LotShape")]
+Anova_LotShape_Price.aov <- aov(SalePrice~LotShape, data=Anova_LotShape_Price)
+
+Anova_Utilities_Price <-cat_subdata2[,c("SalePrice","Utilities")]
+Anova_Utilities_Price.aov <- aov(SalePrice~Utilities, data=Anova_Utilities_Price)
+
+plot(Anova_Neighborhood_Price.aov,1)
+plot(Anova_Zone_Price.aov,1)
+plot(Anova_BsmtFinType1_Price.aov,1)
+plot(Anova_Utilities_Price,1)
+plot(Anova_LotShape_Price.aov,1)
+
+leveneTest(SalePrice~Neighborhood, data=cat_subdata2)
+leveneTest(SalePrice~Zoning, data=cat_subdata2)
+leveneTest(SalePrice~BsmtFinType1, data=cat_subdata2)
+leveneTest(SalePrice~LotShape, data=cat_subdata2)
+leveneTest(SalePrice~Utilities, data=cat_subdata2)
+
+```
+
+
+
+
+
+#Section 5: Exploratory Data analysis for Modelling
+The 3 variables chosen are:  
+Y = SALE PRICE  
+X - nominal - subclass    
+X - Oridinal - LotShape   
+X - discrete -Yrsold
+
+```{r}
+subdata3 <- data[,c("SubClass","LotShape","YrSold", "SalePrice")]
+subdata3$Log_SalePrice <-log(subdata3$SalePrice)
+
+print(vtable(subdata3))
+```
+
+As mentioned in the prior steps,  we know that salePrice is not normally distributed.  By doing a log transform, we see a more "normal" distribution
+as some of the data points at the tail end get pulled down..
+```{r}
+par(mfrow = c(1,2))
+
+p1<-ggplot(subdata3, aes(sample=SalePrice)) + stat_qq(col = "purple") + stat_qq_line(col = "red") + theme_classic() + theme(axis.text.x = element_text(angle = 45, hjust=1))+
+      labs(x="theoritical", 
+           y="sample", title = "QQ Plot Sale Price")
+p2<-ggplot(subdata3, aes(sample=Log_SalePrice)) + stat_qq(col = "purple") + stat_qq_line(col = "red") + theme_classic() + theme(axis.text.x = element_text(angle = 45, hjust=1))+
+      labs(x="theoritical", 
+           y="sample", title = "QQ Plot Log Sale")
+
+grid.arrange(p1,p2,nrow=1)
+
+
+
+```
+
+We now inspect scatter plot and boxplot distribution and compare it to sale price and log sale price. A takeaway from this is that by looking at the distribution of log price level, we see outliers being brought down.  This is beneficial as we no longer have the influence of outliers in our data.
+
+```{r}
+p1<- ggplot(subdata3, aes(x=subdata3[,"SubClass"], y=SalePrice)) + geom_point(color = "purple") + theme_classic() + theme(axis.text.x = element_text(angle = 45, hjust=1))+
+      labs(x="SubClass", 
+           y="Price", title = "SubClass vs Price")
+p2<- ggplot(subdata3, aes(x=subdata3[,"SubClass"], y=Log_SalePrice)) + geom_point(color = "purple")  + theme_classic() + theme(axis.text.x = element_text(angle = 45, hjust=1))+
+      labs(x="SubClass", 
+           y="LogPrice", title = "SubClass vs LogPrice")
+
+grid.arrange(p1,p2,nrow=1)
+```
+
+```{r}
+
+p1<- ggplot(subdata3, aes(x=subdata3[,"LotShape"], y=SalePrice)) + geom_boxplot(fill = "purple")+ theme_classic() + theme(axis.text.x = element_text(angle = 45, hjust=1))+
+      labs(x="LotShape", 
+           y="Price", title = "LotShape vs Price")
+p2<- ggplot(subdata3, aes(x=subdata3[,"LotShape"], y=Log_SalePrice)) + geom_boxplot(fill = "purple")+ theme_classic() + theme(axis.text.x = element_text(angle = 45, hjust=1))+
+      labs(x="LotShape", 
+           y="LogPrice", title = "LotShape vs LogPrice")
+
+grid.arrange(p1,p2,nrow=1)
+
+```
+
+```{r}
+p1<- ggplot(subdata3, aes(x=subdata3[,"YrSold"], y=SalePrice)) + geom_point(color = "purple") + theme_classic() + theme(axis.text.x = element_text(angle = 45, hjust=1))+
+      labs(x="YrSold", 
+           y="Price", title = "YrSold vs Price")
+p2<- ggplot(subdata3, aes(x=subdata3[,"YrSold"], y=Log_SalePrice)) + geom_point(color = "purple")  + theme_classic() + theme(axis.text.x = element_text(angle = 45, hjust=1))+
+      labs(x="YrSold", 
+           y="LogPrice", title = "YrSold vs LogPrice")
+
+grid.arrange(p1,p2,nrow=1)
+```
+
+All in all, the biggest lift we get in transformation is on the dependent variable. When comparing the log price vs price, the normality appears to improve dramatically.  With the predictors, while we see improvement in the outliers, it's not as dramatic, but may still be beneficial in the modelling steps.
+
+This exercises shows us a couple points:  
+There are inherent difficulties when working with the original model data.  without any adjustments,  since the saleprice distribution is not normal, statistical tests and parametric techniques may not work or give accurate results. This requires us to transform the data, which may give better results, but we need to make sure that the interpreation is still accurate.
+
+Transformation at the dependent variable improved the quality of the data and it may be worth while to transform the predictors.  However, the 3 that was chosen were not continuous variable so they may or may not add value.  It may be worthwhile to go back and choose other variables that can be transformed.
+
+#6 Summary & conclusion
+The original ask of this exercise is to predict housing prices.  While a simple task at the surface, the data provided needed to be reviewed and cleaned.  We ran into data issues such as observations that were not 'typical' of an Ames Iowa Home.  We ran into commercial grade zones, and we ran into economic types of problems that do not reflect "typical" housing prices.
+
+Once these were removed, we dug into the data itself to look for clerical errors, or logical fallacies.  In this portion, we looked at missing values, "typos", and other concerns with the data.  This process taught us and made us decide on what to do when we do spot concerns with the data.  While removing more observations is an option, we risk losing too much data.  The alternative would be to try to either impute missing values, or try to reasonably assume what that value should have been.
+
+Next, we start our exploratory data analysis.  This includes looking at the relationship between our independent and dependent variables.  While histogram showed us a good distribution,  boxplot and scatter plot made it clearer to look at outliers.  Our takeaway at this step is that for the most part, there is an imbalance in most of the variables, and there are outliers with respect to price. At the predictor level, outliers are also present.
+
+We also get to see the frequency of each variable.  For example, we now know that most homes cost right around the $200,00 mark, which neighborhood is the most prominent, most homes do not have a pool, square footage between 1000-2000.
+
+One interesting takeaway is that the distribution of year sold is fairly homogenous, which tells us that buyers aren't tending to buy homes of certain years.
+
+Further into the EDA and looking at the relationship between the variables,  we ran multiple correlations and independence test.  The result of our correlation told us that there is a relationship between the sale price and the various predictors, but maybe not so much when you look at predictor vs predictor.  
+
+Finally, our last portion of the EDA was to think about log transformation.  As sales price is not normally distributed, we determe that doing a log transforms normalizes the data and will make our model more valid.
+
+In summary, the data at hand appears to show multiple relationship to price among the variables chosen, so there should be some strength in prediction.  The challenge would be to prep the dat before hand in order to ensure it stays within the statistical assumptions.
+
+
+#APPENDIX
+
+Predictor-Predictor relationship
+
+```{r Message = FALSE,fig.width=5, fig.height=5}
+for(i in 1:length(numeric_subdata2)){
+    print(
+      ggplot(numeric_subdata2, aes(x=numeric_subdata2[,i], y=SubClass)) + geom_point(col = "purple") + theme_classic() + geom_smooth(method='lm', fill = "red") +
+        theme(axis.text.x = element_text(angle = 45, hjust=1))+ geom_smooth(method='lm') +
+      labs(x=colnames(subdata[i])))
+}
+
+for(i in 1:length(numeric_subdata2)){
+    print(
+      ggplot(numeric_subdata2, aes(x=numeric_subdata2[,i], y=PoolArea)) + geom_point(col = "purple") + theme_classic() + geom_smooth(method='lm', fill = "red") +
+        theme(axis.text.x = element_text(angle = 45, hjust=1))+ geom_smooth(method='lm') +
+      labs(x=colnames(subdata[i])))
+}
+
+for(i in 1:length(numeric_subdata2)){
+    print(
+      ggplot(numeric_subdata2, aes(x=numeric_subdata2[,i], y=YearBuilt)) + geom_point(col = "purple") + theme_classic() + geom_smooth(method='lm', fill = "red") +
+        theme(axis.text.x = element_text(angle = 45, hjust=1))+ geom_smooth(method='lm') +
+      labs(x=colnames(subdata[i])))
+}
+
+for(i in 1:length(numeric_subdata2)){
+    print(
+      ggplot(numeric_subdata2, aes(x=numeric_subdata2[,i], y=TotRmsAbvGrd)) + geom_point(col = "purple") + theme_classic() + geom_smooth(method='lm', fill = "red") +
+        theme(axis.text.x = element_text(angle = 45, hjust=1))+geom_smooth(method='lm') +
+      labs(x=colnames(subdata[i])))
+}
+
+for(i in 1:length(numeric_subdata2)){
+    print(
+      ggplot(numeric_subdata2, aes(x=numeric_subdata2[,i], y=Fireplaces)) + geom_point(col = "purple") + theme_classic() + geom_smooth(method='lm', fill = "red") +
+        theme(axis.text.x = element_text(angle = 45, hjust=1))+geom_smooth(method='lm') +
+      labs(x=colnames(subdata[i])))
+}
+  
+```
