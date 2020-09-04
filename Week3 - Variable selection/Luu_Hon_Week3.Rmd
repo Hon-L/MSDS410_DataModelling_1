@@ -1,0 +1,323 @@
+---
+title: "Comp2_Luu"
+author: "Hon Luu"
+date: "4/8/2020"
+output: html_document
+---
+
+
+### (1)	(3 points)  How many observations are in the sample data?
+
+***
+
+There are 72 observations.
+
+### (2)	(3 points)  Write out the null and alternate hypotheses for the t-test for Beta1.
+
+***
+$H_{0}: B_{1} = 0$
+
+$H_{1}: B_{1} \neq 0$
+
+Interpretation:  
+
+$H_{0}$ = there is no effect from $B_{1}$.  You are as likely to get the result from random guessing.
+
+$H_{1}$ = We reject the Null hypothesis
+
+### (3)	(3 points)   Compute the t- statistic for Beta1.  Conduct the hypothesis test and interpret the result.
+$t1 = \frac{B_{i}}{SE_{i}}$
+
+$t1 = \frac{2.186}{.4104} = 5.3265$
+
+$df = 72-2=70$
+
+Critical value of .025 for a two tailed test shows t-statistic is between 2.0 and 1.990.
+Since the 5.3265 t-statistic is larger than the critical value, we reject the null hypotheses that $B_{1}=0$, i.e, reject the hypothesis that There is no effect from this variable.  The P value also confirms it's significance.
+
+
+### (4)	(3 points)   Compute the R-Squared value for Model 1, using information from the ANOVA table.  Interpret this statistic.
+
+***
+
+$R-squared = 1-\frac{SSE}{SST}= 1- \frac{630.37}{2756.37} = 77.1304$
+
+### (5)	(3 points)   Compute the Adjusted R-Squared value for Model 1.  Discuss why Adjusted R-squared and the R-squared values are different.
+
+***
+
+$Adjusted R = 1-\frac{(1-R_{squared})(n-1)}{n-k-1} = 1 - \frac{(1-.771304)(72-1)}{72-4-1} = .7577$
+
+While R-squared assumes that every variable explains the variation to the dependent variable, the Adjusted R squared will tell you the variation explained by the independent variables that actually did affect the dependent variable.  In other words,  it tries to adjust for variables that do not affect the response.
+
+### (6) (3 points)   Write out the null and alternate hypotheses for the Overall F-test.
+
+***
+
+$H_{0}: B_{1}=B_{2}=B_{3}=B_{4}=0$
+
+$H_{1}: B_{i}\neq 0$
+
+At least one $B_{i}$ is not equal to 0.
+
+### (7)	(3 points)   Compute the F-statistic for the Overall F-test.  Conduct the hypothesis test and interpret the result.
+$F_{0} = \frac{SSR}{k}/{\frac{SSE}{(n-p)}} =  \frac{2126}{4} / \frac{630.37}{72-5} = 56.4923$
+
+Since the ratio is large and away from 1, we can reject the null hypothesis and conclude that at least 1 of the $B_{i} >0$
+
+## (8)	 (3 points)   Now let’s consider Model 1 and Model 2 as a pair of models.  Does Model 1 nest Model 2 or does Model 2 nest Model 1?  Explain.
+
+***
+
+Model 1 nest model 2 because model1 is a subset of model2 (The reduced model is nested)
+
+## (9)	(3 points)   Write out the null and alternate hypotheses for a nested F-test using Model 1 and Model
+
+***
+
+$H_{0}:$ The reduced model is adaquete.  i,e $X_{5}=X_{6}=0$ from the full model
+
+$H_{1}:$ The Full model is adequete i.e, $X_{5} \neq 0$$ or ${X_6} \neq 0$
+
+### (10)	  (3 points)   Compute the F-statistic for a nested F-test using Model 1 and Model 2.  Conduct the hypothesis test and interpret the results.
+
+***
+
+$SS_{X5, X6} = SS_{Regression Full Model} - SS_{Regression Reduced Model} = 2183.75946 - 2126 = 57.759$
+
+$SS_{regression Full model} = 2183.75946$
+
+$df = 2$ since we have 2 variables isolated
+
+$\frac {SS_{Unique X5,X6}}{df} = \frac{57.759}{2} = 28.879$
+
+$MSE_{FullModel} = \frac{SSE}{df_{error}} = \frac{572.6105}{65} = 8.80937$
+
+$F = \frac{MS_{uniqueX5,X6}}{MSE_{FullModel}} = \frac{28.879}{8.80937} = 3.2782$
+
+Since the F statistic is greater than 1, we reject the null hypothesis that X5=X6=0
+
+### Part2
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r cars, message = FALSE, warning = FALSE}
+library(ggplot2)
+library(ggcorrplot)
+library(dplyr)
+library(car)
+library(psych)
+library(gridExtra)
+library(vtable)
+```
+
+
+Read data
+```{r pressure}
+data <- read.csv(file="ames_housing_data.csv",head=TRUE,sep=",")
+```
+
+### (11)   Based on your EDA from Modeling Assignment #1, focus on 10 of the continuous quantitative variables that you though/think might be good explanatory variables for SALESPRICE.   Is there a way to logically group those variables into 2 or more sets of explanatory variables?   For example, some variables might be strictly about size while others might be about quality.   Separate the 10 explanatory variables into at least 2 sets of variables.  Describe why you created this separation.  A set must contain at least 2 variables.
+
+***
+
+I've decided to split my variables into 3 parts:
+
+Curb Appeal
+
+Interior
+
+Outdoor
+
+I think it would be interesting to see the model results to potentially see how sale price is affected.  For example,  how does the curb appeal compare to actual "living" space, vs lounging areas like the backyard,pool, etc
+
+### set1 - curb appeal
+
+Lot Frontage
+
+Lot Area
+
+Mas Vnr Area
+
+### set2 - living area
+
+Total Bsmt SF
+
+Gr Liv Area
+
+Garage Area
+
+### set 3 - backyard activities
+
+Pool Area
+
+Wood Deck SF
+
+Open Porch SF
+
+Screen Porch
+
+
+
+```{r}
+#Creating my sets
+set1 <- data[,c("SalePrice","LotFrontage","LotArea","MasVnrArea")]
+set2 <- data[,c("SalePrice","TotalBsmtSF","GrLivArea","GarageArea")]
+set3 <- data[,c("SalePrice","PoolArea","WoodDeckSF","OpenPorchSF","ScreenPorch")]
+```
+
+
+### (12) Pick one of the sets of explanatory variables.   Run a multiple regression model using the explanatory variables from this set to predict SALEPRICE(Y).   Call this Model 3.   Conduct and interpret the following hypothesis tests, being sure you clearly state the null and alternative hypotheses in each case:
+### a)  all model coefficients individually
+### b)  the Omnibus Overall F-test
+
+***
+Null Hypothesis for each variable:
+
+$H_{0}: B_{1}=0:$ There is no relationship between LotFrontageArea to SalePrice. i.e, The sale price that I predict are no closer to the actual saleprice if I would expect by chance.
+
+$H_{1}: B_{1}\neq 0:$.  There is a relationship between LogFrontageArea to SalePrice.
+
+Since our P value is P(<.005), we can say that the variable is signficant and can reject the Null Hypothesis that there is not a relationship between LotFrontageArea and Price.
+
+$H_{0}: B_{2}=0:$ There is no relationship between LotArea to SalePrice. i.e, The sale price that I predict are no closer to the actual saleprice if I would expect by chance.
+
+$H_{1}: B_{2}\neq 0:$  There is a relationship between LotArea to SalePrice
+Since our P value is P(<.005), we can say that the variable is signficant and can reject the Null Hypothesis that there is not a relationship between LotArea and Price.
+
+$H_{0}: B_{3}=0:$ There is no relationship between MasVnrArea to SalePrice. i.e, The sale price that I predict are no closer to the actual saleprice if I would expect by chance.
+
+$H_{1}: B_{3}\neq 0:$  There is a relationship between MasVnrArea to SalePrice
+Since our P value is P(<.005), we can say that the variable is signficant and can reject the Null Hypothesis that there is not a relationship between MasVnrArea and Price.
+
+Omnibus Overall F test
+
+$H_{0}: B_{1}=B_{2}=B_{3}=0$ All the variables do not have a relationship to saleprice.
+
+$H_{1}: B_{i} > 0$.  There is at least 1 variable that is related to SalePrice.
+
+Running the ANOVA produces an overall P and F statistic <.005 and F > 1, which means it is significant so we reject the Null that $H_{0}: B_{1}=B_{2}=B_{3}=0$ and can say that these variables are significant in predicting sale price.
+
+
+```{r}
+
+model3 <- lm(SalePrice~., data=set1)
+
+```
+
+```{r}
+
+summary(model3)
+```
+
+```{r}
+aov_m3<-anova(model3)
+aov_m3
+
+```
+
+### (13)   Pick the other set (or one of the other sets) of explanatory variables.  Add this set of variables to those in Model 3.  In other words, Model 3 should be nested within Model 4.    .   Run a multiple regression model using the explanatory variables from this set to predict SALEPRICE(Y).   Conduct and interpret the following hypothesis tests, being sure you clearly state the null and alternative hypotheses in each case:
+
+###	a)  all model coefficients individually
+
+###	b)  the Omnibus Overall F-test
+***
+
+$H_{0}: B_{1}=0:$
+$H_{1}: B_{1}\neq 0:$
+LotFrontage
+
+$H_{0}: B_{2}=0:$
+$H_{1}: B_{2}\neq 0:$
+LotArea
+
+$H_{0}: B_{3}=0:$
+$H_{1}: B_{3}\neq 0:$
+MasVnrArea
+
+$H_{0}: B_{4}=0:$
+$H_{1}: B_{4}\neq 0:$
+TotalBsmtSF
+
+$H_{0}: B_{5}=0:$
+$H_{1}: B_{5}\neq 0:$
+GrLivArea
+
+$H_{0}: B_{6}=0:$
+$H_{1}: B_{6}\neq 0:$
+GarageArea
+
+Omnibus test
+$H_{0}: B_{1}=B_{2}=B_{3}=B_{4}=B_{5}=B_{6} = 0$
+$H_{1}: B_{i} > 0$
+
+Similar to the prior question:  all variables are significant so we reject the null hyothesis on all variables. The omnibus test provides an F statistic of 947.  since it is larger than 1, we also reject the null hypothesis all $B_{i}$ = 0 and reject that all the variables are not significant in predicting sale price.
+
+
+
+```{r}
+nested_set1set2 <- cbind(set1,set2)
+nested_set1set2 <-nested_set1set2[,-5]
+
+model4 <- lm(SalePrice~., data=nested_set1set2)
+
+summary(model4)
+
+```
+
+
+```{r}
+aov_m4<-anova(model4)
+aov_m4
+summary(model4)
+```
+
+
+### (14)   Write out the null and alternate hypotheses for a nested F-test using Model 3 and Model 4, to determine if the Model 4 variables, as a set, are useful for predicting SALEPRICE or not.  Compute the F-statistic for this nested F-test and interpret the results.
+
+$H_{0}:$ The reduced model is adaquete.  i,e $B_{4}=B_{5}=B_{6}=0$ from the full model
+
+$H_{1}:$ The Full model is adequete i.e, $B_{4} \neq 0$ or ${B_5} \neq 0$ or $B_{6} \neq 0$
+
+Using the full model and reduced model, we calculate an F statistic of 907.0519.  Since this is greater than 1, we can reject the null hypothesis that the 3 variables = 0.  Therefore, they we can reject that interior living quality is not signficant in predicting sale price.
+
+***
+
+```{r}
+#setting up calculations:
+FM<-model4
+RM <- model3
+t1<-anova(FM)
+t2<-anova(RM)
+
+#SSunique = SS(FM) - SS(RM)
+SSunique <- sum(t1$`Sum Sq`[1:6]) - sum(t2$`Sum Sq`[1:3])
+df = 3
+
+#numerator
+numerator =SSunique/df
+
+#denominator:
+MSErrorFM = t1$`Mean Sq`[7]
+
+#F value
+numerator/MSErrorFM
+
+
+
+
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
