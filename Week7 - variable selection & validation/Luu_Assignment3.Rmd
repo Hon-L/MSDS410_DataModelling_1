@@ -1,0 +1,657 @@
+---
+title: "R Notebook"
+output:
+  html_document:
+    df_print: paged
+---
+
+
+```{r message=FALSE, warning=FALSE}
+library(dplyr)
+library(ggplot2)
+library(lessR)
+library(psych)
+library(MASS)
+library(car)
+```
+
+
+
+```{r}
+data <- read.csv("ames_housing_data.csv", stringsAsFactors = TRUE)
+```
+
+
+##### (1)	Preparing the Categorical Variables
+##### This assignment assumes you are using the same Sample Population as from the previous modeling assignment.  If you need to make adjustments to the Sample Population, please do so and report what you’ve done.   Let Y = sale price be the dependent or response variable.  Examine the categorical variables in the Ames Data Set.  On first principles (i.e. your reasoning) which seem most likely to be related to, or predictive of, SALESPRICE?    For those categorical variables that seem most reasonable or interesting, find summary statistics for Y (i.e. means, medians, std dev., etc) BY the levels of the categorical variable.   Which categorical variable(s) have the greatest mean difference between levels?   Why is this an important quality to look for?   Create dummy coded (or effect coded, if you prefer) variables for the interesting categorical variables that may be predictive of SALEPRICE.  Keep in mind, the more categorical variables you want to include in your analysis, the more work required in dealing with those variables.  This work goes up exponentially with the number of categorical variables retained and their numbers of levels.   Be brutally honest about the potential for a categorical variable to be predictive.  If you must, fit regression models to determine R-squared for the categorical variables of interest, and then select only those that have reasonably large R-squared values.  Report the summary statistics for SALESPRICE by group for these interesting categorical variables that you wish to retain for further analysis.  
+***  
+
+```{r warning=FALSE}
+data_cat <- data[,sapply(data,is.factor)]
+data_cat$SalePrice <-data$SalePrice
+```
+
+
+My thought process as a first pass is to run an ANOVA through all the categorical variables.  The hypothesis for an ANOVA is as follows:  
+$H_0$: The means within groups are the same.  
+$H_a$: Not all the means are equal.  
+If the means are equal, then we can conclude that there is no relationship between Sale price and the different groupings.  
+
+A loop is ran to calculate ANOVA and collect the p_value for all the categorical variables. If the P value is statistically significant at .05 level,  then we can reject the null, and the ones that are significant will stay for further analysis.
+
+```{r}
+P_valFrame <- data.frame(character(44), numeric(44), stringsAsFactors = FALSE)
+options(scipen = 999)
+for(i in 1:length(data_cat)){
+  z<-colnames(data_cat[i])
+  P_valFrame[i,1] <- as.character(z)
+  #assign(paste0("Variable_",z),(summary(aov(SalePrice~data[,i],data=data)))[[1]][1,5])
+  P_valFrame[i,2]<-round(summary(aov(SalePrice~data_cat[,i],data=data_cat))[[1]][1,5],4)
+         }
+```
+
+
+Of our 44 categorical variables, we were able to eliminate only 3, so we have 41 categorical variables to inspect.  The ones that were not significant were: Utilities, PoolQC, and MiscFeature. We adjust our dataset to remove these variables.  
+
+```{r}
+
+colnames(P_valFrame)<-c("Variable", "P(>F)")
+subset(P_valFrame, P_valFrame$`P(>F)`<.05)
+
+
+```
+
+Removed the 3 insignificant variables  
+```{r}
+data_cat <- subset(data_cat, select = -c(PoolQC, MiscFeature, Utilities))
+```
+
+Next, I'm going to generate a frequency table for each of the categorial variable.  The idea is that if there is a heavy imbalance between a groupings, some of the data may not be meaningful in predicting price.  For example, if there are 900 gravel homes and 10 Pavement homes, even if it says Pavement homes have a higher sale price,  it may be just because of thin data and is not credible. The output is not shown due to the length of the data.
+
+```{r include=FALSE}
+for(i in 1:length(data_cat)){
+  print(colnames(data_cat[i]))
+  print(table(data_cat[,i]))
+  }
+```
+
+Below are the frequency of the variables which I am opting to omit.  The counts are fairly imbalanced and thin that I believe that any indication of relationship would not be credible
+
+```{r}
+
+table(data_cat$Street)
+table(data_cat$Condition2)
+table(data_cat$RoofMat)
+table(data_cat$Heating)
+table(data_cat$CentralAir)
+table(data_cat$Functional)
+table(data_cat$GarageQual)
+table(data_cat$GarageCond)
+table(data_cat$PavedDrive)
+```
+After removing these variables, we not have 32 variables left to investigate.  
+
+```{r}
+data_cat <-subset(data_cat, select = -c(Street,
+                                        Condition2,
+                                        RoofMat,
+                                        Heating,
+                                        CentralAir,
+                                        Functional,
+                                        GarageQual,
+                                        GarageCond,
+                                        PavedDrive))
+```
+
+
+My next thought is to run a simple OLS regression on each of the categorical variable to inspect the $R^2$ and the statistical significance.  The hope is that these will narrow down a few more  variables that I can use for my model.  
+
+The table below lists the variable with it's adjusted $R^2$.  Before I commit to any of these variables, I'm going to look at a few and just inspect the p-values for the individual groups.  As long as they are not all insignficant, I think some of these variables will end up being decent predictors.  As the adjusted $R^2$ are sorted from highest to lowest, I'll just look at the top 5 and see.
+
+```{r}
+R_sqFrame <- data.frame(character(32), numeric(32), stringsAsFactors = FALSE)
+options(scipen = 999)
+for(i in 1:length(data_cat)){
+  z<-colnames(data_cat[i])
+  R_sqFrame[i,1] <- as.character(z)
+  #assign(paste0("Variable_",z),(summary(aov(SalePrice~data[,i],data=data)))[[1]][1,5])
+  R_sqFrame[i,2]<-summary(lm(SalePrice~data_cat[,i], data=data_cat))$adj.r.squared
+  }
+
+colnames(R_sqFrame)<-c("Variable", "adjusted.R.Squared")
+R_sqFrame[order(-R_sqFrame$adjusted.R.Squared),]
+
+```
+Inspecting the model summary of each variable:  
+Neighborhood seems decent.  There's a few insignificant variables, but most of them are significant.  
+ExterQual has all significant variables.  
+BsmtQual are insignificant for most groups, so I may not use that variable.  
+KitchenQual seems important with all the variables being significant.  
+Alley is also significant, but a lot of missing values were removed.  
+
+Overall, I think the variables that are most predicted will be Neighborhood, Exterior Quality, and Kitchen Quality.  These variables follow intuition that they are what you would consider when purchasing a home, so it does pass the 'common sense' test.
+
+```{r}
+summary(lm(SalePrice~Neighborhood, data=data_cat))
+summary(lm(SalePrice~ExterQual, data=data_cat))
+summary(lm(SalePrice~BsmtQual, data=data_cat))
+summary(lm(SalePrice~KitchenQual, data=data_cat))
+summary(lm(SalePrice~Alley, data=data_cat))
+
+```
+
+As a last piece and for completeness, I'll generate a few plots just to inspect these 3 variables.  The charts do confirm potential relationship to price, especially when you look at the boxplot and you see the mean is visually at different levels for each variable.  Overall, I feel fairly confident with the variables chosen based on the calculated $R^2$, hypothesis testing, and visuals.  
+
+
+```{r}
+data_cat <- subset(data, select=c(SalePrice,Neighborhood, ExterQual, KitchenQual))
+```
+
+```{r}
+for(i in 1:length(data_cat)){
+    print(
+      ggplot(data_cat, aes(x=data_cat[,i], y=SalePrice)) + geom_boxplot(col = "purple") + theme_classic() + theme(axis.text.x = element_text(angle = 45, hjust=1))+
+      labs(x=colnames(data_cat[i]), 
+           y="Sale Price",title = paste0("Scatterplot of"," ",colnames(data_cat[i])))) 
+}
+
+```
+
+A residual analysis of the variables doesn't indicate the residuals to be completely out of line.  They aren't perfectly "normal" and residuals are not completly random, but I think it would be okay to investigate and see where we end up.
+
+```{r}
+plot((lm(SalePrice~Neighborhood, data=data_cat)))
+plot((lm(SalePrice~ExterQual, data=data_cat)))
+plot((lm(SalePrice~KitchenQual, data=data_cat)))
+
+```
+
+
+```{r message = FALSE,fig.width=5, fig.height=5}
+for(i in 1:length(data_cat)){
+    print(
+      ggplot(data_cat, aes(x=data_cat[,i], y=SalePrice)) + geom_point(col = "purple") + theme_classic() + theme(axis.text.x = element_text(angle = 45, hjust=1))+
+      labs(x=colnames(data_cat[i]), 
+           y="Sale Price",title = paste0("Scatterplot of"," ",colnames(data_cat[i])))) 
+}
+
+
+```
+
+For this exercise, I will use Exerior quality and Kitchen as my final 2 variables to investigate.  I think it would be interesting to have 1 variable that is exterior versus one variable that is interior and see what happens.  Neighborhood is pretty predictive since it has the highest $R^2$, but I think neighborhood is pretty complex (there's a few insignificant variables, geographic location will matter, and some may can potentially be grouped together), that I'm opting to start with something simple for now and see where it takes me.
+
+
+```{r message=FALSE}
+catvar <- data_cat[,c("SalePrice","ExterQual","KitchenQual")]
+```
+
+Summary statistics of Exterior Quality:  
+The mean difference between the highest and lowest is 377,919-89,924 =  231,432.  
+The mean difference is interesting as the higher the difference, the wider the spread, which is also an indication that the means are different
+```{r}
+print("Basic Summaries - Exterior Qual")
+tapply(catvar$SalePrice,catvar$ExterQual, summary)
+
+print("Standard Deviation - Exterior Qual")
+tapply(catvar$SalePrice,catvar$ExterQual, sd)
+```
+
+Summary statistics of Kitchen Quality:  
+The mean difference between the highest and lowest is 337,339-105,907 =  231,432
+```{r}
+print("Basic Summaries - Kitchen")
+tapply(catvar$SalePrice,catvar$KitchenQual, summary)
+
+print("Standard Deviatin - Kitchen")
+tapply(catvar$SalePrice,catvar$KitchenQual, sd)
+```
+
+```{r}
+data$dummyExterior.Ex <- ifelse(catvar$ExterQual == "Ex",1,0)
+data$dummyExterior.Fa <- ifelse(catvar$ExterQual == "Fa",1,0)
+data$dummyExterior.Gd <- ifelse(catvar$ExterQual == "Gd",1,0)
+data$dummyExterior.TA <- ifelse(catvar$ExterQual == "TA",1,0)
+
+data$dummyKitchen.Ex <- ifelse(catvar$KitchenQual=="Ex", 1,0)
+data$dummyKitchen.Fa <- ifelse(catvar$KitchenQual=="Fa", 1,0)
+data$dummyKitchen.Gd <- ifelse(catvar$KitchenQual=="Gd", 1,0)
+data$dummyKitchen.Po <- ifelse(catvar$KitchenQual=="Po", 1,0)
+data$dummyKitchen.TA <- ifelse(catvar$KitchenQual=="TA", 1,0)
+
+
+
+```
+
+##### (2)	The Predictive Modeling Framework
+##### A defining feature of predictive modeling is assessing model performance out-of-sample.  We will use uniform random number to split the sample into a 70/30 train/test split.  With a train/test split we now have two data sets: one for in-sample model development and one for out-of-sample model assessment.  
+
+```{r}
+
+# Set the seed on the random number generator so you get the same split every time that you run the code.
+set.seed(123)
+data$u <- runif(n=dim(data)[1],min=0,max=1);
+
+# Define these two variables for later use;
+data$QualityIndex <- data$OverallQual*data$OverallCond;
+data$TotalSqftCalc <- data$BsmtFinSF1+data$BsmtFinSF2+data$GrLivArea;
+
+# Create train/test split;
+train.df <- subset(data, u<0.70)
+test.df  <- subset(data, u>=0.70)
+
+# Check your data split. The sum of the parts should equal the whole.
+# Do your totals add up?
+dim(data)[1]
+
+dim(train.df)[1]+dim(test.df)[1]
+
+
+```
+##### Our 70/30 training/test split is the most basic form of cross-validation.  We will 'train' each model by estimating the models on the 70% of the data identified as the training data set, and we will 'test' each model by examining the predictive accuracy on the 30% of the data.  In R will estimate our models using the lm() function, and we will be able to apply those linear models using the R function predict().  You will want to read the R help page for the R function predict().  In particular, pay attention to the newdata argument.  Your test data set is your new data.
+Show a table of observation counts for your train/test data partition in your data section.
+
+```{r}
+print("Train Test partition")
+dim(train.df)[1]
+dim(test.df)[1]
+
+
+```
+##### (3)	Model Identification by Automated Variable Selection
+##### Create a pool of candidate predictor variables.  This pool of candidate predictor variables needs to have at least 15-20 predictor variables, you can have more.  The variables should be a mix of discrete and continuous variables.  You can include dummy coded or effect coded variables, but not the original categorical variables.   Include a well-designed list or table of your pool of candidate predictor variables in your report.  NOTE: If you need to create additional predictor variables, then you will want to create those predictor variables before you perform the train/test split outlined in (2).  Also note that we will be using our two variables QualityIndex and TotalSqftCalc in this section.
+The easiest way to use variable selection in R is to use some R tricks.  If you have small data sets (small number of columns), then these tricks are not necessary.  However, if you have large data sets (large number of columns), then these tricks are NECESSARY in order to use variable selection in R effectively and easily.  
+Trick #1:  we need to create a data frame that only contains our response variable and the predictor variables that we want to include as our pool of predictor variables.  We will do this by creating a drop list and using the drop list to shed the unwanted columns from train.df to create a ‘clean’ data frame.  
+***  
+
+Variables chosen: 
+LotFrontage  
+LotArea  
+OverallQual  
+OverallCond  
+YearBuilt  
+YearRemodel  
+MasVnrArea  
+TotalBsmtSF  
+GrLivArea  
+TotRmsAbvGrd  
+Fireplaces  
+OpenPorchSF  
+PoolArea     
+BedroomAbvGr  
+KitchenAbvGr  
+
+Factor:
+KitchenQual  -dummied and used "TA" as basis of interpretation  
+ExternalQual -dummied and used "TA" as basis of interpretation  
+
+```{r}
+candidateModel <-train.df[,c("LotFrontage","LotArea","OverallQual","OverallCond","YearBuilt","YearRemodel","MasVnrArea","TotalBsmtSF","GrLivArea","TotRmsAbvGrd","Fireplaces", "OpenPorchSF","PoolArea","BedroomAbvGr","KitchenAbvGr", "SalePrice", "QualityIndex","TotalSqftCalc","dummyExterior.Ex","dummyExterior.Fa","dummyExterior.Gd","dummyKitchen.Ex","dummyKitchen.Fa","dummyKitchen.Gd","dummyKitchen.Po")]
+
+candidateModel_test <-test.df[,c("LotFrontage","LotArea","OverallQual","OverallCond","YearBuilt","YearRemodel","MasVnrArea","TotalBsmtSF","GrLivArea","TotRmsAbvGrd","Fireplaces","OpenPorchSF","PoolArea","BedroomAbvGr","KitchenAbvGr", "SalePrice", "QualityIndex","TotalSqftCalc","dummyExterior.Ex","dummyExterior.Fa","dummyExterior.Gd","dummyKitchen.Ex","dummyKitchen.Fa","dummyKitchen.Gd","dummyKitchen.Po")]
+
+
+#imputing missing valules with medians
+candidateModel$LotFrontage<-ifelse(is.na(candidateModel$LotFrontage), median(candidateModel$LotFrontage,na.rm = TRUE),candidateModel$LotFrontage)
+candidateModel$MasVnrArea<-ifelse(is.na(candidateModel$MasVnrArea), median(candidateModel$MasVnrArea,na.rm = TRUE),candidateModel$MasVnrArea)
+candidateModel$TotalBsmtSF<-ifelse(is.na(candidateModel$TotalBsmtSF), median(candidateModel$TotalBsmtSF,na.rm = TRUE),candidateModel$TotalBsmtSF)
+candidateModel$TotalSqftCalc<-ifelse(is.na(candidateModel$TotalSqftCalc), median(candidateModel$TotalSqftCalc,na.rm = TRUE),candidateModel$TotalSqftCalc)
+
+candidateModel_test$LotFrontage<-ifelse(is.na(candidateModel_test$LotFrontage), median(candidateModel_test$LotFrontage,na.rm = TRUE),candidateModel_test$LotFrontage)
+candidateModel_test$MasVnrArea<-ifelse(is.na(candidateModel_test$MasVnrArea), median(candidateModel_test$MasVnrArea,na.rm = TRUE),candidateModel_test$MasVnrArea)
+candidateModel_test$TotalBsmtSF<-ifelse(is.na(candidateModel_test$TotalBsmtSF), median(candidateModel_test$TotalBsmtSF,na.rm = TRUE),candidateModel_test$TotalBsmtSF)
+candidateModel_test$TotalSqftCalc<-ifelse(is.na(candidateModel_test$TotalSqftCalc), median(candidateModel_test$TotalSqftCalc,na.rm = TRUE),candidateModel_test$TotalSqftCalc)
+```
+
+Setting up the models
+```{r}
+upper.lm <-lm(SalePrice~., data=candidateModel)
+lower.lm <- lm(SalePrice~1, data=candidateModel)
+sqft.lm <- lm(SalePrice~TotalSqftCalc, data=candidateModel)
+```
+
+running the autovariable selection
+```{r}
+forward.lm <-stepAIC(object=lower.lm, scope = list(upper=formula(upper.lm), lower=~1), direction=c('forward'))
+backward.lm <-stepAIC(object=upper.lm, scope = list(upper=formula(upper.lm), lower=~1), direction=c('backward'))
+stepwise.lm <-stepAIC(object=sqft.lm, scope = list(upper=formula(upper.lm), lower=~1), direction=c('both'))
+junk.lm <- lm(SalePrice ~ OverallQual + OverallCond + QualityIndex + GrLivArea + TotalSqftCalc, data=train.df)
+```
+
+```{r}
+plot(forward.lm)
+plot(backward.lm)
+plot(stepwise.lm)
+plot(junk.lm)
+```
+
+
+```{r}
+sum.f<-summary(forward.lm)
+sum.b<-summary(backward.lm)
+sum.s<-summary(stepwise.lm)
+sum.j<-summary(junk.lm)
+
+sum.f
+sum.b
+sum.s
+sum.j
+
+```
+
+
+With all the variables chosen, as there is chance of multicollinearity, we will look at the variance inflation factors of each predictor. VIF works by running a regression of each predictor on the remaining preditors, and uses that $R^2$ to determine multicollinearity.  Essentially, if all the other variables are able to explain the variance of the predictor variable in question (high $R^2$), then there is a chance that it is multicollinearity.  The formula $\frac{1}{1-R^2}$ is the "inflation" factor used.  Anything above 5, we will say is inflated with at least one of the predictors.
+
+```{r}
+forward.vif<-sort(vif(forward.lm), decreasing=TRUE)
+backward.vif<-sort(vif(backward.lm), decreasing=TRUE)
+step.vif<-sort(vif(stepwise.lm), decreasing = TRUE)
+junk.vif <-sort(vif(junk.lm), decreasing = TRUE)
+```
+
+The forward.lm model shows GRLiv Area as highly inflated
+
+```{r}
+forward.vif
+```
+
+The backwards also shows the same thing
+```{r}
+backward.vif
+```
+
+The stepwise also shows the same thing.
+```{r}
+step.vif
+```
+
+Below is the table of the model comparison of 4 metrics on 4 models. A quick inspection seems to confirm that Forward Selection, Backward Selection, and Stepwise has the very similar metric scores.  This appears to be consistent as even though the approach is different for each technique, the methodology is similar with adding and dropping variables based on $R^2$.  
+
+```{r}
+d <-data.frame(metrics=c("R.Sq","AIC","BIC","MSE","MAE"))
+Adjusted.R <- c(sum.f$adj.r.squared, sum.b$adj.r.squared, sum.s$adj.r.squared,sum.j$adj.r.squared)
+AIC <- c(AIC(forward.lm), AIC(backward.lm), AIC(stepwise.lm), AIC(junk.lm))
+BIC <- c(BIC(forward.lm), BIC(backward.lm), BIC(stepwise.lm), BIC(junk.lm))
+MSE <-c(mean(sum.f$residuals^2), mean(sum.b$residuals^2), mean(sum.s$residuals^2), mean(sum.j$residuals^2))
+MAE <- c(mean((abs(sum.f$residuals))),mean((abs(sum.b$residuals))),mean((abs(sum.s$residuals))),mean((abs(sum.j$residuals))))
+
+modelCompare<-data.frame(rbind(round(Adjusted.R,4), round(AIC,4), round(BIC,4), round(MSE,4), round(MAE,4)))
+colnames(modelCompare)<-c("ForwardSelection", "BackwardSelection", "Stepwise", "Junk")
+cbind(d,modelCompare)
+```
+
+
+##### In predictive modeling, we are interested in how well our model performs (predicts) out-of-sample.  That is the point of predictive modeling. For each of the four models compute the Mean Squared Error (MSE) and the Mean Absolute Error (MAE) for the test sample.  Which model fits the best based on these criteria?  Did the model that fit best in-sample predict the best out-of-sample?  Should we have a preference for the MSE or the MAE?  What does it mean when a model has better predictive accuracy in-sample then it does out-of-sample?  
+***  
+
+Of all the models, in both training and test set, it appears they fit reasonably similarly.  With that in mind, it wouldn't matter which one to pick as a "best" model.  For most of my model, my training data MAE is less than the test data MAE, so my data does underfit.  However, if it was reversed, then I would say that it is overfitting.
+
+```{r}
+forward.test <- predict(forward.lm, newdata=candidateModel_test)
+backward.test <- predict(backward.lm, newdata=candidateModel_test)
+step.test <- predict(stepwise.lm, newdata=candidateModel_test)
+junk.test <-predict(junk.lm, newdata=candidateModel_test)
+```
+
+```{r}
+d <-data.frame(metrics=c("MSE","MAE"))
+test.df$forward.predicted <- forward.test
+test.df$forwardDiff <- test.df$forward.predicted-test.df$SalePrice
+
+test.df$backward.predicted <- backward.test
+test.df$backwardDiff <- test.df$backward.predicted-test.df$SalePrice
+
+test.df$step.predicted <- step.test
+test.df$stepDiff <- test.df$step.predicted-test.df$SalePrice
+
+test.df$junk.predicted <- junk.test
+test.df$junkDiff <- test.df$junk.predicted-test.df$SalePrice
+
+MSE <-c(mean((test.df$forwardDiff^2)), mean((test.df$backwardDiff^2)), mean((test.df$stepDiff^2)), mean((test.df$junkDiff^2)))
+MAE <-c(mean(abs(test.df$forwardDiff)), mean(abs(test.df$backwardDiff)), mean(abs(test.df$stepDiff)), mean(abs(test.df$junkDiff)))
+
+modelCompare_test<-data.frame(rbind(round(MSE,4), round(MAE,4)))
+colnames(modelCompare_test)<-c("ForwardSelection", "BackwardSelection", "Stepwise", "Junk")
+cbind(d,modelCompare_test)
+
+```
+##### (5)	Operational Validation
+##### We have validated these models in the statistical sense, but what about the business sense?  Do MSE or MAE easily translate to the development of a business policy?  Typically, in applications we need to be able to hit defined cut-off points, i.e. we set a policy that we need to be p% accurate. Let's define a variable called PredictionGrade, and consider the predicted value to be 'Grade 1' if it is within ten percent of the actual value, 'Grade 2' if it is not Grade 1 but within fifteen percent of the actual value, Grade 3 if it is not Grade 2 but within twenty-five percent of the actual value, and 'Grade 4' otherwise.  
+***
+
+Accuracy scores are important, but for the business sense, you need to put in consideration time and effort and if that is worth the "cost".  For example, it may not be worth the expense to focus on a perfect model, if it is not an absolute necessaity to produce the perfect model.  At some point, the rate of return will diminish.
+
+
+```{r}
+# Training Data
+# Abs Pct Error
+forward.pct <- abs(forward.lm$residuals)/candidateModel$SalePrice;
+backward.pct <- abs(backward.lm$residuals)/candidateModel$SalePrice;
+step.pct <- abs(stepwise.lm$residuals)/candidateModel$SalePrice;
+```
+
+```{r}
+# Assign Prediction Grades - forward;
+forward.PredictionGrade <- ifelse(forward.pct<=0.10,'Grade 1: [0.0.10]',
+					ifelse(forward.pct<=0.15,'Grade 2: (0.10,0.15]',
+						ifelse(forward.pct<=0.25,'Grade 3: (0.15,0.25]',
+						'Grade 4: (0.25+]')
+					)					
+				)
+
+forward.trainTable <- table(forward.PredictionGrade)
+forward.trainTable/sum(forward.trainTable)
+
+# Assign Prediction Grades - backward;
+backward.PredictionGrade <- ifelse(backward.pct<=0.10,'Grade 1: [0.0.10]',
+					ifelse(backward.pct<=0.15,'Grade 2: (0.10,0.15]',
+						ifelse(backward.pct<=0.25,'Grade 3: (0.15,0.25]',
+						'Grade 4: (0.25+]')
+					)					
+				)
+
+backward.trainTable <- table(backward.PredictionGrade)
+backward.trainTable/sum(backward.trainTable)
+
+# Assign Prediction Grades - step;
+step.PredictionGrade <- ifelse(step.pct<=0.10,'Grade 1: [0.0.10]',
+					ifelse(step.pct<=0.15,'Grade 2: (0.10,0.15]',
+						ifelse(step.pct<=0.25,'Grade 3: (0.15,0.25]',
+						'Grade 4: (0.25+]')
+					)					
+				)
+
+step.trainTable <- table(step.PredictionGrade)
+data.frame(step.trainTable/sum(step.trainTable))
+
+```
+
+
+```{r}
+# Test Data
+# Abs Pct Error
+forward.testPCT <- abs(candidateModel_test$SalePrice-forward.test)/candidateModel_test$SalePrice;
+backward.testPCT <- abs(candidateModel_test$SalePrice-backward.test)/candidateModel_test$SalePrice;
+step.testPCT <- abs(candidateModel_test$SalePrice-step.test)/candidateModel_test$SalePrice;
+junk.testPCT <- abs(candidateModel_test$SalePrice-junk.test)/candidateModel_test$SalePrice;
+```
+
+```{r}
+
+# Assign Prediction Grades - forward;
+forward.testPredictionGrade <- ifelse(forward.testPCT<=0.10,'Grade 1: [0.0.10]',
+					ifelse(forward.testPCT<=0.15,'Grade 2: (0.10,0.15]',
+						ifelse(forward.testPCT<=0.25,'Grade 3: (0.15,0.25]',
+						'Grade 4: (0.25+]')
+					)					
+				)
+
+forward.testTable <-table(forward.testPredictionGrade)
+data.frame(forward.testTable/sum(forward.testTable))
+
+# Assign Prediction Grades - backward;
+backward.testPredictionGrade <- ifelse(backward.testPCT<=0.10,'Grade 1: [0.0.10]',
+					ifelse(backward.testPCT<=0.15,'Grade 2: (0.10,0.15]',
+						ifelse(backward.testPCT<=0.25,'Grade 3: (0.15,0.25]',
+						'Grade 4: (0.25+]')
+					)					
+				)
+
+backward.testTable <-table(backward.testPredictionGrade)
+data.frame(backward.testTable/sum(backward.testTable))
+
+# Assign Prediction Grades - step;
+step.testPredictionGrade <- ifelse(step.testPCT<=0.10,'Grade 1: [0.0.10]',
+					ifelse(step.testPCT<=0.15,'Grade 2: (0.10,0.15]',
+						ifelse(step.testPCT<=0.25,'Grade 3: (0.15,0.25]',
+						'Grade 4: (0.25+]')
+					)					
+				)
+
+step.testTable <-table(step.testPredictionGrade)
+data.frame(step.testTable/sum(step.testTable))
+
+
+
+```
+Of the 3 models, it appears that the backward selection generated just  a tiny bit better result in the test set when you compare performance through Grade 2.
+
+##### 6) 	For which ever model you find to be “Best” after the automated variable selection procedures and all of these comparisons, you will need to re-visit that model and clean it up, as well as conduct residual diagnostics.  Frankly, the end of an automated variable selection process is in many ways a starting point.  What kinds of things do you want to check for and “clean up”?  
+***  
+Based on the 3 models, results on the test set were all really close, with the backward seleciton method performing just a bit better at 60% being within "Grade 1", while the other 2 methods had about 59% at Grade 1.  Because of this, we will proceed the rest of the modelling work with the backtested model.
+
+
+Investigating the data with backward selection model
+```{r}
+summary(backward.lm)
+```
+
+
+
+##### Setting up date again
+```{r}
+#adding dummies
+dummy_Kit <- model.matrix(~ KitchenQual - 1, data = data)
+dummy_Ext <- model.matrix(~ ExterQual - 1, data = data)
+backwardmodel <- data[,c("SalePrice","LotFrontage","LotArea","OverallQual","OverallCond","YearBuilt","YearRemodel","MasVnrArea","TotalSqftCalc","GrLivArea", "TotalBsmtSF", "Fireplaces","OpenPorchSF","PoolArea","BedroomAbvGr","KitchenAbvGr")]
+backwardmodel <- cbind(backwardmodel, dummy_Kit,dummy_Ext)
+
+#logging sale price
+backwardmodel$logSale <- log(backwardmodel$SalePrice)
+#remove the original Sale Price
+#remove basis of interpretation for the dummy variables
+backwardmodel <- subset(backwardmodel, select = -c(KitchenQualTA, ExterQualTA, SalePrice))
+
+#imputing
+backwardmodel$LotFrontage<-ifelse(is.na(backwardmodel$LotFrontage), median(backwardmodel$LotFrontage,na.rm = TRUE),backwardmodel$LotFrontage)
+backwardmodel$MasVnrArea<-ifelse(is.na(backwardmodel$MasVnrArea), median(backwardmodel$MasVnrArea,na.rm = TRUE),backwardmodel$MasVnrArea)
+backwardmodel$TotalSqftCalc<-ifelse(is.na(backwardmodel$TotalSqftCalc), median(backwardmodel$TotalSqftCalc,na.rm = TRUE),backwardmodel$TotalSqftCalc)
+backwardmodel$TotalBsmtSF<-ifelse(is.na(backwardmodel$TotalBsmtSF), median(backwardmodel$TotalBsmtSF,na.rm = TRUE),backwardmodel$TotalBsmtSF)
+
+#train_test_split
+set.seed(123)
+backwardmodel$u <- runif(n=dim(backwardmodel)[1],min=0,max=1);
+
+
+# Create train/test split;
+back.train <- subset(backwardmodel, u<0.70)
+back.test  <- subset(backwardmodel, u>=0.70)
+
+
+
+
+```
+
+##### Fitting on model with logged Price.  
+Rerunning the model with log sales appears to improve model output. residual plots look much better when looking at residual vs fitted, and also the QQ plot seems a lot more normal.  $R^2$ also explains more variance at 86% vs 84% in the initial run.
+```{r}
+
+logmodel <- lm(logSale~.-u, data=back.train)
+summary(logmodel)
+plot(logmodel)
+
+```
+
+
+In order to simplify the model, My initial thought was to look at the $R^2$ change as I add and drop variables to see which ones give yields the highest and lowest $R^2$ change (manual version of an automated selection tool).  If the $R^2$ change is low, then that variable can be dropped.  HOWEVER, as my $R^2$ is already high after converting the sale price to a log Sale price,  I'm going to consider working backwards and just pick the variables that yields a high $R^2$.  With a current $R^2$ of 86%,  if I can explain even around 75% to 80% of the variance with as little variables as possible, I think this would be impactful.  In my mind, this would give a good balance between accuracy and model simplicity vs effeciency time.
+
+First pass: log sale with just an overallQual yields an $R^2$ of 68.17%.  This is high.   
+Second pass: log sale with overallQual + the kitchen categorial variables increased adjusted $R^2$ to 70.3%.  This is questionable.  
+Third pass: OverallQual+ ExterQual dummies yields an $R^2$ of 69.5%.  This does not help.  
+Fourth pass: overallQual + TotalSqftCalc yields an $R^2$ of 78%.  
+Fifth pass: OverallQual + TotalSqftCalc + lot frontage does not improve $R^2$.  
+sixth pass:  same result with Lot area.  
+seventh pass: trying out basement, pool, GrLivArea does not seem to push $R^2$ past 78%.  
+eight pass: OverallQual + TotalSqftCalc + YearBuilt brings up the  adjusted $R^2$ to 80%.  
+
+With the full model from the automated selection telling me that 23 variables are significant and explains 86% of the variance,  I was able to wittle that down to 3 variables that explains 80% of the variance.  While this is not as explanatory as the full model, I think narrowing down the model to say that 3 variables explains a majority of the variance is impactful. We can potentially say that for the majority of folks, people care about size, overallquality, and age of the home in determining  sale price (the big picture stuff), and maybe less about the specifics (bathroom size, etc). Another takeway from this is that the categorical variables I chose were maybe not the best ones to predict price.
+
+
+
+
+A few more tests were ran to look at scatter plots and residuals
+
+```{r}
+logmodel <- lm(logSale~OverallQual+ TotalSqftCalc + YearBuilt, data=back.train)
+summary(logmodel)
+plot(logmodel)
+
+
+
+```
+
+when looking at the correlation between predictor variables, it appears there is a very strong correlation between total square feet and Overal Qual. Because of this, I've opted to remove TotalSquareFeet from my model.
+
+```{r}
+ggplot(data=back.train, aes(x=back.train$OverallQual, y=TotalSqftCalc)) + geom_point()
+ggplot(data=back.train, aes(x=back.train$OverallQual, y=YearBuilt)) + geom_point()
+ggplot(data=back.train, aes(x=back.train$YearBuilt, y=TotalSqftCalc)) + geom_point()
+```
+
+my updated model is now as follows:  
+As a result, my $R^2$ is back down to 70%, but my residuals look much better, so I have better confidence in this model than the 3 variable model with a higher $R^2$
+
+```{r}
+logmodel <- lm(logSale~OverallQual + YearBuilt, data=back.train)
+summary(logmodel)
+plot(logmodel)
+```
+
+A nested F test is also done just to make sure that the variable is significant and overall model fit is acceptable.
+```{r}
+f1 <- lm(logSale~ YearBuilt + OverallQual, data=back.train)
+f2 <- lm(logSale~YearBuilt, data=back.train)
+anova(f1,f2)
+```
+
+
+Validating on the test set it appears the results are pretty acceptable.  In both our training and test set, about 94% fell into the Grade1 category so in terms of overfitting or underfitting, we dont seem to have an issue here.  Also, since most of the predictions fell into the Grade1 category, we can be confident of it being "underwriting quality".  If anything, it appears that using a log transform helped the data bit in alleviating some of the normality requirements.
+```{r}
+backward.pct <- abs(logmodel$residuals)/back.train$logSale;
+backward.PredictionGrade <- ifelse(backward.pct<=0.02,'Grade 1: [0.0,02]',
+					ifelse(backward.pct<=0.05,'Grade 2: (0.02,0.05]',
+						ifelse(backward.pct<=0.1,'Grade 3: (0.05,0.1]',
+						'Grade 4: (0.10+]')
+					)					
+				)
+
+backward.trainTable <- table(backward.PredictionGrade)
+data.frame(backward.trainTable/sum(backward.trainTable))
+
+backward.test <- predict(logmodel, newdata=back.test)
+backward.testPCT <- abs(back.test$logSale-backward.test)/back.test$logSale;
+backward.testPredictionGrade <- ifelse(backward.testPCT<=0.02,'Grade 1: [0,.02]',
+					ifelse(backward.testPCT<=0.05,'Grade 2: (0.02,0.05]',
+						ifelse(backward.testPCT<=0.1,'Grade 3: (0.05,0.10]',
+						'Grade 4: (0.10+]')
+					)
+				)
+
+backward.testTable <-table(backward.testPredictionGrade)
+data.frame(backward.testTable/sum(backward.testTable))
+
+```
+
+##### For reflection / conclusions:   After working on this problem and this data for several weeks, what are the challenges presented by the data?   What are your recommendations for improving predictive accuracy?   What do you think of the notion of parsimony:  simpler models might be preferable over complicated models?   Do we really need a max fit model or is a simpler but more interpretable model better?  
+***  
+Going through this assignment,  There was definitley a "5 steps forward 1 step backward" feeling.  I learned quite a bit of new techniques to think about to consider, and while that is helpful in the analysis, the more I know, the more I realized there's a responsibility in making sure I perform my analysis in a statistically correct manner.  I would say I do have a bit of a "phobia" when it comes to running models and tests.  The main reason is because of the assumptions and  fact that I'm still trying to understand how much I can get away with in terms of breaking assumptions (since nothing is every perfectly normal).  The biggest challenge in this problem set was just setting up the data with Question 1.  With adding categorical variables to the data, it seemed to become way more complicated to assess correlation and  $R^2$.  The more you dummy the variables, the more complicated the model becomes and translates to more work by the modelor. Another challeng was just trying set up the data and going one by one the metrics and thinking through $R^2$, when it matters, when it doesn't, where the correlation is, when do I stop, when can I stop, etc etc.
+At the end of the day, a simple model is much better to work with (with a reasonable sacrifice on accuracy).  It makes it easy to interpret and it makes the model easy to tackle.  with a complex model, I think I can spend many more weeks on it going over each and every variable. Another issue that I ran into was running VIFS and creating dummy variables and in the end, opted not the use them.  It's interesting that investigating the variables indepdently will give one result but when running it from a modelling technique, can potentially tell another story.
