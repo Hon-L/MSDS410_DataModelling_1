@@ -1,0 +1,498 @@
+---
+title: "Assignment2_Luu"
+author: "Hon Luu"
+date: "5/1/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r message=FALSE}
+library(ggplot2)
+library(ggcorrplot)
+library(corrplot)
+library(lessR)
+library(CARS)
+library(olsrr)
+```
+
+### Reading in the full Dataset.  
+```{r message = FALSE}
+data <- read.csv(file="ames_housing_data.csv",head=TRUE,sep=",")
+```
+
+### Data with continuous variable
+```{r}
+data_cont <- data[,c("LotFrontage","LotArea","MasVnrArea","BsmtFinSF1","BsmtFinSF2","TotalBsmtSF", "FirstFlrSF","SecondFlrSF","LowQualFinSF","GrLivArea","GarageArea","WoodDeckSF", "OpenPorchSF","EnclosedPorch", "ThreeSsnPorch", "ScreenPorch","PoolArea","MiscVal","SalePrice")]
+```
+
+
+
+
+Initial views indicate that GR Living area may be the "best" continuous variable to start.  Histogram shows a fairly "normal" distribution (with some outliers), and correlation to sale price is the highest at 71%. QQ plot appears to show it's one of the more normal ones among all continuous variables.
+
+# Part A
+
+```{r}
+model1 <-lm(SalePrice~GrLivArea, data=data_cont)
+summary(model1)
+
+```
+
+### a.  
+Make a scatterplot of Y and X, and overlay the regression line on the cloud of data.  
+***  
+```{r message = FALSE}
+ggplot(data_cont, aes(x=GrLivArea, y=SalePrice)) + 
+geom_point(col = "purple") + 
+geom_smooth(method='lm', fill = "red") + 
+  theme_classic() + theme(axis.text.x = element_text(angle = 45, hjust=1)) + 
+  labs(title = "Housing Price",x="Above Ground living area", y="Sale Price")
+```
+
+### b  
+***  
+The equation for the linear regression using Above ground living area is $Y = 13289.634 + 111.694*X_{1}$.
+13289.634 is the intercept, which says that if the above ground living area is 0, then the housing price is predicted to be 13289.634.  This may or may not make sense.  A house with 0 square feet does not seem logical, but it could mean it's the price of the lot(the land).  
+$B_{1}$ is 111.694, which indicates that for every squarefeet change,  price increases about $111.70.
+
+### c  
+***  
+The R-squared is 49.95%, which says that this variable explains about half the variance in the price.  Adjusted R squared is similar, which is expected as there are not other variables to consider.
+
+### d   
+***  
+$H_{0} : B_{1} = 0$  
+$H_{1} : B_{1} \neq 0$  
+This is to say that the null hypothesis is that squarefootage of above ground does not affect sale price.  
+The alternate hypothesis is to reject the Null.  
+The omnibus hypotheis is the same as we are only using a single variable.  
+
+Based on the anova output, the F statistic is significant, so we reject the null hypothesis that the square footage of above grade is 0.
+```{r}
+anova(model1)
+```
+
+### e    
+***  
+```{r}
+#a - predicted values of model
+model1_predicted_values<- model1$fitted.values
+data_cont$predicted_values <- model1_predicted_values
+
+#b - calculating the residuals
+data_cont$residuals <-data_cont$SalePrice - data_cont$predicted_values
+
+#mean of residuals
+sd_residuals <- sd(data_cont$residuals)
+#standardizing the residuals
+data_cont$standardized_residuals <- data_cont$residuals/sd_residuals
+
+```
+
+### Histogram of Standardized Residuals   
+The standardized residuals look normal from a histogram standpoint as they center around zero, but we do see observation around 5 and more standard deviations.
+```{r message=FALSE}
+ggplot(data_cont, aes(x=data_cont$standardized_residuals)) + geom_histogram(fill = "purple") + theme_classic() + labs(title = "Standarized Residuals", x="standard deviation")
+```
+
+### resdiuals vs predicted values.   
+As the predicted values get higher, the residuals start to "fan out".  So for the lower home prices, we seem to be predicting well, but as the price gets higher and higher, our difference between y and y_hat gets larger and larger.  
+From a outliers and influential points perspective,  there are a few observations THAT are over $500,000.  These can potentially be influential variables that is driving the results.
+```{r}
+ggplot(data_cont, aes(x=data_cont$predicted_values,y=data_cont$standardized_residuals)) + 
+  geom_point(col = "purple") + 
+  theme_classic() + theme(axis.text.x = element_text(angle = 45, hjust=1)) + labs(Title = "standarized residuals", y="standarized residuals", x = "predicted Sale Price")
+```
+# 2  
+
+```{r}
+model2_data <- data[,c("OverallQual","SalePrice")]
+model2 <-lm(SalePrice ~ OverallQual, data=model2_data)
+summary(model2)
+```
+
+### a    
+```{r message=FALSE}
+ggplot(data, aes(x=data$OverallQual, y=SalePrice)) + geom_point(col = "purple") + geom_smooth(method='lm', fill = "red") + theme_classic() + theme(axis.text.x = element_text(angle = 45, hjust=1))
+```
+
+### b    
+The model equation for this is $Y = -95003.6 + 45251.0*X_{1}$.  
+Similar to the prior example, the intercept may not be informative here, but the $B_{1}$ is saying that as the overall quality rating increases, the sale price also increases 45,251.
+
+The interpretation using Overall quality should be bit different.  Since the independent variable is not continuous, the interpretation may not be accurate.  For example, looking at model1, to say that each unit change in square footage will increase/decrease sale by $x makes sense and is consistent for all square footage unit change.  
+However, for overall quality,  each rating increase in the condition may not necessairly equate to the same dollar change in price because the jump from a rating 1 to 2,  vs a rating from 7 to 8 may be different.  so it may be true to say that when rating2 from rating1 generates a price increase of $45251, that may not be true from a rating10 to a rating9 standpoint.
+
+### C  
+The R-squared in this example says that this variable explains 64% of the variance.  Again, it may be true and accurate, but the impacts of each specific rating change is still unknown.
+
+
+### d  
+$H_{0} : B_{1} = 0$  
+$H_{1} : B_{1} \neq 0$  
+This is to say that the null hypothesis is that overall Quality does not affect sale price.  
+The alternate hypothesis is to reject the Null.  
+The omnibus hypotheisis IS the same as we are only using a single variable.  
+
+Based on the anova output, the F statistic is significant, so we reject the null hypothesis that the overall quality of above grade is 0.
+```{r}
+anova(model2)
+```
+
+
+###  e  
+For this (and future exercises), we will rely on the lessR or other packages for the visuals.  
+Looking at the residuals vs fitted, we see a similar "fanning out" pattern, indicating heteroscedascitity and potential outliers in the upper ends of residuals and leverage variables in the more expensive houses.  
+
+```{r}
+reg2<-reg(SalePrice~OverallQual,data=model2_data)
+reg2
+```
+
+# 3  
+Overall, OverallQual has a higher R squared, but I"m a bit hesitant on the result because of it not being a continuous variable. The Overall Quality may explain more variance, but when thinking about quanitifying  impact (inferential),  it may not be as useful. If this was a purely prediction exercise, I would use OverallQual.  If this was an inferential exercise to understand the  impact of specific variables,  I would rely on living space square footage.
+
+# PartB  
+### 4
+```{r}
+model3_data <-data[,c("OverallQual","GrLivArea", "SalePrice")]
+model3 <- lm(SalePrice~., data=model3_data)
+
+summary(model3)
+```
+
+###  a
+$Y = -109919.156 + 33241.400*X1 + 58.754*X2$  
+The interpretation would be similar.  we would ignore the intercept.  
+For every unit of Overall quality increase (while holding Gr living area constant), saleprice goes up 33,241, and on the flip slide, when OverallQual is held, for every unit change in living area square footage,  sale price increases by 58.75.  In this example, we speak to the individual impact, but account for the impact of the other.  Something interesting to see is that adding overall quality in our model, the impact of squarefootage is much smaller. Again though, we caveat with explaning the impact of overallQual.
+
+#### b  
+The R squared indicate a better fit at 73.2.  both R squared and adjusted r squard indicate it is a better fit then model 1, which had an R2 of 49.95, a difference of .2325 point difference
+
+
+### c  
+$H_{0} : B_{1} = 0$  
+$H_{1} : B_{1} \neq 0$ 
+
+$H_{0} : B_{2} = 0$  
+$H_{1} : B_{2} \neq 0$ 
+
+$H_{0}: B_{1}=B_{2}=0$ All the variables do not have a relationship to saleprice.
+
+$H_{1}: B_{i} > 0$.  There is at least 1 variable that is related to SalePrice.
+Both variables are significant so we reject the null  in all situations.
+
+
+
+```{r}
+anova((model3))
+```
+### d
+```{r}
+reg3<-reg(SalePrice~OverallQual+GrLivArea,data=model3_data)
+
+```
+
+### 4e    
+inspecting the plots, we still see issues with heteroscedasticity (although, an improvement from the prior plot).  As is, the variables do break the assumptions of linear regression, but we can continue working with it for a possible transformation.  We still do see some outliers in the more expensive homes, so they will need to be addressed.
+
+
+# 5 
+```{r}
+model4_data <-data[,c("SalePrice", "OverallQual","GrLivArea", "WoodDeckSF")]
+model4 <- lm(SalePrice~., data=model4_data)
+summary(model4)
+```
+### a      
+The equation for this is $-106703 + 32374X_{1} + 56.519X_{2} + 57.838X_{3}$  
+Similar to the prior examples,  all variables are significant and we see Overall quality having the most impact on sale price.  Adding the new variable of WoodDeckSF has a similar impact to sale price.  It is possible that square footage in general doesnt have the greatest impact on sale price per unit change.
+
+### b    
+Surprisingly,  the R square did not improve much as it is only 73.9%, and improvement of .7 in explanation on the variance.  However, looking at the coefficient as they are both similar, it may be because square footage doesnt have a strongly unit impact per sale price and it may be correlated with another predictor.
+
+### c  
+$H_{0} : B_{1} = 0$  
+$H_{1} : B_{1} \neq 0$ 
+
+$H_{0} : B_{2} = 0$  
+$H_{1} : B_{2} \neq 0$ 
+
+$H_{0} : B_{3} = 0$  
+$H_{1} : B_{3} \neq 0$ 
+
+$H_{0}: B_{1}=B_{2}=B_{3}=0$ All the variables do not have a relationship to saleprice.
+
+$H_{1}: B_{i} > 0$.  There is at least 1 variable that is related to SalePrice.
+All 3 variables are significant so we reject the null  in all situations.
+
+```{r}
+anova(model4)
+```
+
+### d      
+using the new variable of WoodDeckSF,  we actually dont see much improvement in the residuals vs predicted.  So while we reject the null hypothesis,  based on the residual vs fitted, we may not use woodDeck as a variable if we had a second attempt at this.
+```{r}
+reg3<-reg(SalePrice~OverallQual + GrLivArea + WoodDeckSF, data = model4_data)
+```
+
+# Part C  
+
+Plots of the log model below
+
+
+```{r}
+#LNmodel1 <- lm(log(SalePrice)~GrLivArea, data=data_cont)
+LNmodel1 <- data_cont[,c("SalePrice","GrLivArea")]
+LNmodel1$LogSalePrice <-log(LNmodel1$SalePrice)
+LNreg1<-reg(LogSalePrice~GrLivArea,data=LNmodel1)
+```
+
+```{r}
+LNmodel3 <- lm(log(SalePrice)~GrLivArea+OverallQual, data = model3_data)
+LNmodel3 <- model3_data[,c("SalePrice","GrLivArea","OverallQual")]
+LNmodel3$LogSalePrice <-log(LNmodel3$SalePrice)
+LNreg3<-reg(LogSalePrice~GrLivArea+OverallQual,data=LNmodel3)
+```
+
+```{r}
+
+LNmodel4 <- lm(log(SalePrice)~GrLivArea+OverallQual+WoodDeckSF, data = model4_data)
+
+LNmodel4 <- lm(log(SalePrice)~GrLivArea+OverallQual+WoodDeckSF, data = model4_data)
+LNmodel4 <- model4_data[,c("SalePrice","GrLivArea","OverallQual", "WoodDeckSF")]
+LNmodel4$LogSalePrice <-log(LNmodel4$SalePrice)
+LNreg4<-reg(LogSalePrice~GrLivArea+OverallQual+WoodDeckSF,data=LNmodel4)
+```
+### 6      
+Comparing across models (see below), we see the most improvement in Model4 after transformation.  Prior to transformation,  our Model4 explains 74% of the variance.  After transformation, we see an improvement of 4% to 77%.  This suggests that our log transform does help. Looking at the Root mean squared error, we cant compare across models since the log model is in a different unit.  However,  this is an illustration of how our standard error does decrease as we add more variables.
+
+
+```{r}
+df <- data.frame("Model"=c("Model1","Model3","Model4", "Model1_log", "Model3_log", "Model4_log"), 
+                 "R-Squared"=c(.49,.73,.74,.48,.75,.77), "Adj R-Squared"=c(.49,.73,.74,.48,.76,.77), "RMSE"=c(237.7,203,201.9,.53,.44,.44))
+df
+```
+
+### 7 
+The difference in interpretation for a transformed response variable is that the units are in a logrithmic scale.  so you need to transform it back to regular scale once you are complete with model adjustments.  Depending on the context, if we are talking about prediction(final result), the scales shouldn't matter, but if we are talking about explaining, we would need to undo the log to speak to the non-technical audience.
+
+# Part D
+### 8   
+```{r}
+
+
+LNmodel4 <- model4_data[,c("SalePrice","GrLivArea","OverallQual", "WoodDeckSF")]
+LNmodel4$LogSalePrice <-log(LNmodel4$SalePrice)
+LN_reg4<-lm(LogSalePrice~GrLivArea+OverallQual+WoodDeckSF,data=LNmodel4)
+
+t1<-ols_plot_dffits(LN_reg4)
+n=2930
+p=3
+threshold = 2*sqrt((3+1)/(2930-3-1))
+threshold
+  
+
+```
+
+
+
+```{r}
+dffitsData <- t1$data
+LNmodel4$Dffits_indicator <-dffitsData$dbetas
+
+updatedData <- LNmodel4[which(LNmodel4$Dffits_indicator <= threshold & LNmodel4$Dffits_indicator >= -threshold),]
+str(updatedData)
+
+threshold
+```
+
+
+With the updated data, we see an improvement of Rsquared to 82.8%, which is a 7% improvement.  This occurs after we removed the influential points of about 138 points~ about 5% of the data.
+
+The idea of removing the influential points appears to be an acceptable action because of the improvement and also because of the it only being about 5% of the total sample. Keeping in mind that we are still trying to predict a 'typical' home price, the using 95% of the data still tells the story.
+
+```{r}
+UpdatdLN_reg4<-lm(LogSalePrice~GrLivArea+OverallQual+WoodDeckSF,data=updatedData)
+summary(UpdatdLN_reg4)
+
+
+```
+
+
+# 9
+
+### Approach  
+1.  Going back to the beginning,  I'll check the $R^2$ and scatter plot for correlation (see appendix).  I'll remove ones that I feel are not correlated.  
+2.  I'll then look at correlation for the predictor and remove any predictors that are correlated.  
+3.  Then I'll scale my predictor variable and run the model.  
+4.  then I'll use my model results and look at the potential to remove outliers.  
+
+### Looking at $R^2$ 
+Based on  my plotsI will consider:  
+FrstFlrsquarefootage, GrLivArea, WoodDeckSF, LotArea, secondFlr sF, Openproach SF as those visually and numerically show correlation to sale price.  Because the $R^2$ is low overall, most of the variables I chose are still "low".
+
+
+
+Of these, I'm keeping GRLivArea, WoodDeckSF, LotArea, Open Porch.  From an $R^2$ perspective, these have lower correlation coefficients (to eachother).  It also appears to make sense as I'm choosing characteristics for different portions of the home (living area, deck, land, and backyard)
+
+```{r  message = FALSE,fig.width=8, fig.height=8}
+corr <-cor(data_cont)
+ggcorrplot(corr,
+           type ="lower",
+           lab = TRUE,
+           lab_size=3,
+           method = "circle",
+           colors = c("red", "white", "purple"),
+           title = "Correlogram of Housing prices",
+           ggtheme = theme_classic)
+
+```
+
+
+# adding to model 4
+
+```{r}
+model5_data <- data[,c("SalePrice","GrLivArea","WoodDeckSF","LotArea","OpenPorchSF", "OverallQual")]
+model5_data$LogSalePrice <- log(model5_data$SalePrice)
+```
+
+###  linear regression on raw data.  
+The $R^{2}$ explains 77.4% of the variance.  
+```{r}
+model5_raw <-lm(LogSalePrice~GrLivArea+WoodDeckSF+LotArea+OpenPorchSF+OverallQual,data=model5_data)
+summary(model5_raw)
+
+anova(model5_raw)
+```
+#### scale and center the data
+
+Unfortunately, scaling the data did not do much improvement to the $R^2$ (77.4%).  Because of this,  I think using the standard units will make more sense from an interprability standpoint.
+
+
+```{r}
+scaled_data_x <- model5_data[,c("GrLivArea","WoodDeckSF","LotArea","OpenPorchSF", "OverallQual")]
+y <- model5_data[,"LogSalePrice"]
+
+model5_data_scaled <- data.frame(lapply(scaled_data_x, function(x) scale(x,center=TRUE, scale=TRUE)))
+
+final_data<-cbind(y,model5_data_scaled)
+final_reg <- reg(y~GrLivArea+WoodDeckSF+LotArea+OpenPorchSF+OverallQual,data=final_data)
+final_reg
+
+
+```
+Using the non-scaled data, the equation is:  $Y=10.493+.00226X_{1}+ .00226X_{2}+ .00226X_{3}+ .00226X_{4}+ .00226X_{5}$.
+Interpreting the coefficients is not reccomednded as we'll need to undo the log, so we wont interpret the coeffient, but we do see significance in all the variables.  We are also get to reject the null hyptohesis in the t-statistic and the omnibus test.
+
+
+looking at the residuals plots:  
+Residual vs leverage display a few points outside of the cooks distance, which is an indication of influence of high leverage.  Also, atleast between 0.00 to 0.05, the spread of standaridized residuals do seem to decrease just a bit.
+
+Normal QQ plot appears to tell us that the data is not normally distributed.
+
+scale location tells us the spread of the residuals among the range of predictors.we do see a decently straight line with random points, so I'm tending to lean on this satisfying homoscaedcisty.
+
+Residuals vs fitted do show a fairly straight line and random points, so this tells us that that there are not any non-linear relationships.
+
+```{r}
+plot(model5_raw)
+```
+
+Now we run DFFITS again on this data and remove outliers/
+
+
+```{r}
+t2<-ols_plot_dffits(model5_raw)
+n=2930
+p=5
+threshold = 2*sqrt((3+1)/(2930-3-1))
+threshold
+```
+
+### model refit  
+```{r}
+dffitsData <- t2$data
+model5_data$Dffits_indicator <-dffitsData$dbetas
+
+updatedData5 <- model5_data[which(model5_data$Dffits_indicator <= threshold & model5_data$Dffits_indicator >= -threshold),]
+
+str(updatedData5)
+
+updatedData5_reg5<-lm(LogSalePrice~GrLivArea+WoodDeckSF+LotArea+OpenPorchSF+OverallQual,data=updatedData5)
+summary(updatedData5_reg5)
+
+```
+The updated $R^{2}$ is 85%
+
+
+# Conclusion  
+In general, transformation and data removal appears to help in overall model performance.  While a benefit on the surface, the tradeoff is interprtability as we log and transform the data and we reduce datapoints.  I was surprised though, that scaling did not do much to the result.
+
+The hypothesis tests I do see as a good guide, but as I dug deeper,  I feel it does seem to bring subjectivity in how to pick model variables.  For example, while a statistic would say a variable is signficant,  the scatterplot may tempt me to not pick it, or vice versa.  So far, every variable I picked said it is statistically signficant, so it does bring a bit of doubt as "too good to be true."
+
+As for next steps,  I think an automated variable selection method would be the logical next step to do some of the manual work. my variable selections were chosen purely based on a high level look, so having an automated way to look at EVERY $R^{2}$ difference of all predictor combination will help.
+
+
+# Appendix  
+####Initial histogram chart of continuous variables.  
+Normally distributed for some while some are skewed.  While independent variables are not assumed to be normal for a linear regression model,  the skewness can tell us a bit about potential outliers and influential variables.
+```{r  message = FALSE,fig.width=5, fig.height=5}
+options(scipen = 999)
+for(i in 1:length(data_cont)){
+  print(
+      ggplot(data_cont, aes(x=data_cont[,i])) + geom_histogram(fill = "purple") + theme_classic() + 
+      labs(x=colnames(data_cont[i]), 
+           y="Frequency",title = paste0("Frequency of"," ",colnames(data_cont[i])))) 
+  
+}
+```
+
+###Scatter plot of continuous variables to saleprice.  
+The scatter plot allows us to visually see correlation to sale price.  anything that doesn't look correlated *may* be considered to be removed.  
+***
+
+```{r  message = FALSE,fig.width=5, fig.height=5}
+for(i in 1:length(data_cont)){
+    print(
+      ggplot(data_cont, aes(x=data_cont[,i], y=SalePrice)) + geom_point(col = "purple") + geom_smooth(method='lm', fill = "red") + theme_classic() + theme(axis.text.x = element_text(angle = 45, hjust=1))+
+      labs(x=colnames(data_cont[i]), 
+           y="Sale Price",title = paste0("Scatterplot of"," ",colnames(data_cont[i])))) 
+}
+```
+###Correlation matrix  
+***
+
+The correlation matrix confirms our scatter plots and shows which ones have the highest correlation coefficient.  a high $R^{2}$ may be an indication of the variable importance.
+
+```{r}
+
+corr <-cor(data_cont)
+ggcorrplot(corr,
+           type ="lower",
+           lab = TRUE,
+           lab_size=3,
+           method = "circle",
+           colors = c("red", "white", "purple"),
+           title = "Correlogram of Housing prices",
+           ggtheme = theme_classic)
+```
+### Q-Q plot  
+The Q-Q plot reinforces the histogram view and shows us which ones are 'normal'.
+```{r}
+for(i in 1:length(data_cont)){
+  if (class(data_cont[,i]) == "integer"){
+    print(
+      ggplot(data_cont, aes(sample=data_cont[,i])) + 
+        stat_qq(col = "purple") + 
+        stat_qq_line(col = "red") + theme_classic() + theme(axis.text.x = element_text(angle = 45, hjust=1))+
+      labs(x="theoritical", 
+           y="sample",title = paste0("Q-Q to test for Normality of "," ",colnames(data_cont[i])))) 
+  } else {
+    next
+  }
+}
+```
+
