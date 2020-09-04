@@ -1,0 +1,399 @@
+---
+title: "Assign1_Luu"
+author: "Hon Luu"
+date: "4/16/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+Modeling the US States Data
+
+Data: The data for this assignment is the US State data set:  USStates.CSV.    It is a 12 variable dataset with n=50 records.  The data, calculated from census data, consists of state-wide average or proportion scores for the non-demographic variables.  As such, higher scores for the composite variables translate into having more of that quality.   There is no other information available about this data.
+
+Objective:Every dataset has a “story” to tell.  It just doesn’t have the voice to speak the story.  In a sense, it is your job as the analyst to “tell” the story that the data has to offer. That is your objective here:  To uncover the story this dataset has to tell.
+
+```{r}
+#libraries used
+library(ggplot2)
+library(psych)
+library(ggcorrplot)
+library(lmSupport)
+
+```
+
+
+```{r}
+#import data
+data <- read.csv(file="USStates.csv",head=TRUE,sep=",")
+
+```
+
+### Given the variables in this dataset, which variables can be considered explanatory (X) and which considered response (Y)?  Can any variables take on both roles?   What is the population of interest for this problem (yes – this is a trick question!)?
+***
+Inspecting the data, all the variables could potentially be a "Y" response variable or an "X" explanatory variable.  All the variables are descriptive in nature and can be used to predict eachother. Just as you would use the variables to predict the "score" for HouseholdIncome,  you  can also use the variables to predict Obesity score or any other variable. It would then be up to the modellor to decide how to translate the score to tell the story or to make the business case.
+
+For the State and Region,  linear regression may not be the best though.  You may need to utilize some type of multinomial logistic regression to predict which chararacteristic tend to fall in to which location you want to categorically predict the location.
+
+The sample population of interest would be census participants from varying states, already aggregated at a state level.  Without much other information,  it is possible that the  calculated score are from a sample of individual sample participants.  i,e if you resample census participants for each state again, you will get a different average composite score.
+
+```{r}
+#inspecting the first few rows of data
+str(data)
+head(data)
+```
+
+### 2. For the duration of this assignment, let’s have HOUSEHOLDINCOME be the response variable (Y).  Also, please consider the STATE, REGION and POPULATION variables to be demographic variables.  Obtain basic summary statistics (i.e. n, mean, std dev.) for each variable. Report these in a table.  Then, obtain all possible scatterplots relating the non-demographic explanatory variables to the response variable (Y).
+
+***
+Basic Summary statistics below indicating mean, standard deviation and other relevant statustics.
+Scatter plots also created relating the Non-demographic data to Income. What we see is that each variable appears to have some sort of univariate relationship with Income (both positive and negative)
+
+
+```{r}
+#subdata_demographic<- data[,c("HouseholdIncome","State","Region","Population")]
+describe(data)
+summary(data)
+
+```
+
+```{r}
+subdata_nondemographic <- data[,4:13]
+
+#Loop to create scatterplot of all variables.
+for(i in 1:length(subdata_nondemographic)){
+    print(
+      ggplot(subdata_nondemographic, aes(x=subdata_nondemographic[,i], y=HouseholdIncome)) + 
+        geom_point(col = "purple") + 
+        theme_classic() + 
+        theme(axis.text.x = element_text(angle = 45, hjust=1)) + 
+        geom_smooth(method='lm', fill = "red") +
+        labs(x=colnames(subdata_nondemographic[i]), 
+             y="HouseholdIncome",
+             title = paste0("Scatterplot of"," ",colnames(subdata_nondemographic[i])))) 
+}
+
+```
+
+
+### 3.Obtain all possible pairwise Pearson Product Moment correlations of the non-demographic variables with Y and report the correlations in a table.  Given the scatterplots from step 2) and the correlation coefficients, is simple linear regression an appropriate analytical method for this data?   Why or why not?
+***
+
+The corrleation coefficient (R-squared) and the scatter plots are consistent with each other. Positive correlation to Household income are College and Insured(Among others), while there are 2 negative correlation, smokers and Obesity.
+As we do see variables that are linearly related to Household income, linear regression would be an option to model. More specifically, Simple linear regression be appropriate because we see one variable (college) that has a relatively high correlation, while the remaining variables are not as high.  It is possible that just a single variable regression may explain most of the variance, so a simple linear regression is a good start.
+
+Whether the results are meaningful will fully depend on other tests such as normality, residuals, etc etc.
+
+```{r}
+#Create empty dataframe to populate R-squared later.
+corr_table<-data.frame("Variable"=c("HouseholdIncome", "College", "Insured", "TwoParents", "PhysicalActivity", "HighSchool", "HeavyDrinkers", "NonWhite", "Smokers", "Obese"), "CorrelationToHouseholdIncome"=c(0,0,0,0,0,0,0,0,0,0))
+
+#loop through all r-squared
+for (i in 1:10){
+  t1 <-cor.test(subdata_nondemographic$HouseholdIncome,subdata_nondemographic[,i])
+  corr_table[i,2] <-round(t1$estimate,4)
+}
+#sort by highest R2
+corr_table<-corr_table[order(-corr_table$CorrelationToHouseholdIncome),]
+corr_table
+
+#correlation matrix for a visual
+correlation <- cor(subdata_nondemographic, method = "pearson")
+ggcorrplot(correlation,
+           hc.order = TRUE,
+           type = "lower",
+           lab = TRUE)
+```
+
+### 4.Fit a simple linear regression model to predict Y using the COLLEGE explanatory variable.  Use the base STAT lm(Y~X) function.  Why would you want to start with this explanatory variable? 
+###Call this Model 1. Report the results of Model 1 in equation form and interpret each coefficient of the model in the context of this problem.  Report the ANOVA table and model fit statistic, R-squared. Use the summary statistics from steps 2) and 3) to verify, by hand computation, the estimates for the slope and intercept.
+
+
+***
+We start with College because College has the highest R-squared (correlation coefficient). This may be the most meaningful variable to predict household income as it has the highest correlation.
+The coefficient below tells us that for each unit increase in college score,  the Household income score will increase by .98 units.  This variable appears to also be statistically significant so we should not discard this variable.
+
+```{r}
+model1 <- lm(data$HouseholdIncome~data$College)
+summary_mod1<-summary(model1)
+```
+
+The Linear regression equation is shown below, along with model output, and ANOVA output.
+The R-squared manually calculated from the ANOVA and the Mode's R-squared is shown.  Both are in line with eachother.
+```{r}
+#Equation Form
+y_hat <- paste0("Y= ", round(model1$coefficients[1],2)," + ", round(model1$coefficients[2],2)," * college")
+y_hat
+
+#anova
+model1_anova <- aov(model1)
+model1_anova_summary<-summary(aov(model1_anova))
+model1_anova_summary
+summary_mod1
+
+#R-squared from anova:  SSR/SST
+1739/(1739+1961)
+
+#Rsquared from model
+summary_mod1$r.squared
+```
+
+We also demonstrate calculating the slope and intercept of the linear equation by first principles.  The result matches the result from the linear regression model
+```{r}
+#Calculating the linear equation by hand
+Y<-subdata_nondemographic$HouseholdIncome
+X<- subdata_nondemographic$College
+#Creating the X,Y,XY, XX, and YY
+RegressionTable <-cbind(X,Y)
+RegressionTable<-data.frame(RegressionTable)
+RegressionTable$XY <-RegressionTable$X*RegressionTable$Y
+RegressionTable$XX<-RegressionTable$X*RegressionTable$X
+RegressionTable$YY<-RegressionTable$Y*RegressionTable$Y
+
+head(RegressionTable)
+
+
+sumX<- sum(RegressionTable$X)
+sumX_squared<- (sum(RegressionTable$X))**2
+sumY<- sum(RegressionTable$Y)
+sumXY<- sum(RegressionTable$XY)
+sumXX<- sum(RegressionTable$XX)
+sumYY<- sum(RegressionTable$YY)
+
+
+#Linear Regression Formula to calcualte the intercpept
+paste("The manually calculated intercept is", ((sumY)*(sumXX)-(sumX)*(sumXY))/(((50)*(sumXX))-(sumX)**2))
+
+#calculate the coefficient
+paste("The manually calculated coefficient for college is",(50*(sumXY)-(sumX)*(sumY))/(((50)*(sumXX))-(sumX)**2))
+```
+
+
+### 5.Write R-code to calculate and create a variable of predicted values based on Model 1.  Use the predicted values and the original response variable Y to calculate and create a variable of residuals (i.e. residual = Y – Y_hat = observed minus predicted) for Model 1. Using the original Y variable, the predicted, and/or residual variables, write R-code to: 
+### •	Square each of the residuals and then add them up.   This is called sum of squared residuals, or sums of squared errors.
+### •	Deviate the mean of the Y’s from the value of Y for each record (i.e. Y – Y_bar).  Square each of the deviations and then add them up.  This is called sum of squares total.
+### •	Deviate the mean of the Y’s from the value of predicted (Y_hat) for each record (i.e. Y_hat – Y_bar).  Square each of these deviations and then add them up.  This is called the sum of squares due to regression.
+### •	Deviate the mean of the Y’s from the value of predicted (Y_hat) for each record (i.e. Y_hat – Y_bar).  Square each of these deviations and then add them up.  This is called the sum of squares due to regression.
+### •	Calculate a statistic that is:   (Sum of Squares due to Regression) / (Sum of squares Total)
+### Verify and note the accuracy of the ANOVA table and R-squared values from the regression printout from part 4), relative to your computations here.
+
+***
+
+Residuals with residuals sum of squared is shown here.
+```{r}
+residuals <- data$HouseholdIncome - model1$fitted.values
+residuals_squared <- residuals**2
+residuals_sum_squared <- sum(residuals_squared)
+```
+
+Sum of squard total is created here.
+```{r}
+mean_Y <- mean(data$HouseholdIncome)
+sum_square_total <- sum((mean_Y - data$HouseholdIncome)**2)
+```
+
+Sum of squared regression is created here.
+```{r}
+sum_square_regression<-sum((mean_Y - model1$fitted.values)**2)
+```
+
+
+Comparing the R-squared that is produced using the sum_square_regression / sum_square total,  it aligns with the R-squared in the model output and also the anova.
+```{r}
+sum_square_regression/sum_square_total
+summary(model1_anova)
+1739/(1739+1961)
+
+summary_mod1$r.squared
+```
+
+
+### 6.Fit a multiple linear regression model to predict Y using COLLEGE and INSURED as the explanatory variables.  Use the base lm(Y~X) function.  Call this Model 2. Report the results of Model 2 in equation form, interpret each coefficient of the model in the context of this problem, and report the model fit statistic, R-squared. How have the coefficients and their interpretations changed?  Calculate the change in R-squared from Model 1 to Model 2 and interpret this value.  For this specific problem, is it OK to use the hypothesis testing results to determine if the additional explanatory variable should be retained or not?   Think statistically using first principals.
+
+***
+
+We create Model #2
+```{r}
+model2 <- lm(subdata_nondemographic$HouseholdIncome~subdata_nondemographic$College + subdata_nondemographic$Insured)
+
+```
+
+
+
+With model1, using a single variable,  we can say that for ever unit change in college score, household income would change by .98units.  That is to say,  for every point of score increase in college, Household income  score would increase just under 1unit(point score). The R-squared for model1 is 47%, which means that College by itself explains 47% of the variance.
+
+with model2, using 2 variables, introducing Insured into the equation, we can say that for every unit change in college (after Insured is adjusted for), household income increases by .84units.
+For every unit change in Insured(after college is adjusted for), household income scores increases by .22.  the R2 is 48%, which means this model is explaining 48% of the variance in the model.
+
+The change in R2 between the 2 model is the difference, which is .48-.47 = .01. Intuitively,  with a single model,  we assumed incorrectly that College affects Income by .98. This is actually not the case as Insured also has an impact, from a multivariate point of view.   In addition insured did not dramatically increase in explaining the variance between our model and observed results. This actually makes sense since back in our correlation matrix, we saw that College already has a high correlation with Insured.  So in this case,  adding Insured does not add value to the model. This would mean that additional variables may be needed.
+
+Looking at the coefficient change in College from a single variable to a 2-variable model,  we can assume that as we add more variables,  the coefficient may start to spread out among all the other variables as we discover other variables are contributing to the Income.
+
+The null hypothesis in linear regression is that there is no relationship between the  X variable and the Y variable. The hypothesis test would tell us which variable we may potentially throw out if the result of the hypothesis test says that X and Y are independent. So it would be helpful and appropriate to include a hypothesis test for variable selection.
+
+Summary of model2 and R-squared.
+```{r}
+summary_mod2<-summary(model2)
+summary_mod2
+Y_hat2 <-paste0("Y= ", round(model2$coefficients[1],2)," + ", round(model2$coefficients[2],2)," * college"," + ",round(model2$coefficients[3],2), " * Insured")
+Y_hat2
+summary_mod2$r.squared
+
+```
+
+
+### 8. In a sequential fashion, continue to add in the non-demographic variables into the prediction model, one variable at a time. Make a table summarizing the change in R-squared that is associated with each variable added.  Based on this information, what variables should be retained for a “best” predictive model?  What criteria seems appropriate to you? During this problem, practice interpreting coefficients for each model.  Do any of the interpretations become counter intuitive as you fit more and more complex models?  What does, or would, this mean for the model being developed?  You do not need to report all of the coefficient interpretations, but this is a general question to contemplate and skill to use in model determination.   Please write a short summary of your conclusions here.
+
+***
+
+In general, if looking at individual correlation coefficient,  I would start with the variable with the highest r-squared and add variables, by descending r-squared.
+Looking at the R-squared value and R-squared change, it appears that as you add more terms, the r-squared will increase and never decrease.  This happens because  there is the assumption that every variable affects the dependent variable.  This may not be accurate.  Instead, we look at the Adjusted R-squared which applies a pentalty for variables that do not enhance the model.  Inspecting the adjusted R-squared, we see the 1 variable r-squared is .45, and the 8 variable r-squared is .68.  However then the  9 variable r-squared decreases just slightly
+
+Based on this,  I would be inclined to use the model with 8 variables, and not use the 9th variable (Obesity) as it decreased the R-squared
+
+Looking at the model with 8 variables, we can intepret 1 unit of positive change in coefficient will increase the income score, and 1 unit of negative change will decrease the income score.
+
+In this case,  college will increase the score of income by .64units, while smokers will decrease income score of .37units.  Intuitively,  college graduate make more money, smokers make less, and surprisingly,  heavy drinkers also make more money.
+
+An interesting finding when comparing all models is that as we add more variables,  the coefficient for the primary variable(which had the highest R-squared) decreases over time.  To me,  this is saying that the original .98 coefficient for a single variable is actually accounting for the impact of the other variables, and this .98 variable gets "spread out" among all the other variables as we add more to the model.  
+
+here, we set up our code to compare all models as we sequentially add variables.
+```{r}
+#Assigning y to response variable
+y<-subdata_nondemographic$HouseholdIncome
+
+#sort data
+subdata_nondemographic <- subdata_nondemographic[,c("HouseholdIncome","College","Insured","TwoParents","PhysicalActivity","HighSchool","HeavyDrinkers","NonWhite","Smokers","Obese")]
+
+#create a loop to create 8 objects, m1 = model with 1 var, m2=model with 2var....m9 = model with all variables.
+for (i in (2:10)){
+  assign(paste0("m",i-1),subdata_nondemographic[,c(1,2:i)])
+}
+
+#run linear regression model on all 8 objects.
+sequential_model_1variable <- lm(HouseholdIncome~., data = m1)
+sequential_model_2variable <- lm(HouseholdIncome~., data = m2)
+sequential_model_3variable <- lm(HouseholdIncome~., data = m3)
+sequential_model_4variable <- lm(HouseholdIncome~., data = m4)
+sequential_model_5variable <- lm(HouseholdIncome~., data = m5)
+sequential_model_6variable <- lm(HouseholdIncome~., data = m6)
+sequential_model_7variable <- lm(HouseholdIncome~., data = m7)
+sequential_model_8variable <- lm(HouseholdIncome~., data = m8)
+sequential_model_9variable <- lm(HouseholdIncome~., data = m9)
+```
+
+
+
+summary and equation for all model objects and R2 for all 8 objects
+```{r}
+#summary for all 8 objects
+s1<-summary(sequential_model_1variable)
+y_hat1 <- "23.0664 + .9801*college"
+s2<-summary(sequential_model_2variable)
+y_hat2 <- "9.6728 + .8411*college + .2206*Insured"
+s3<-summary(sequential_model_3variable)
+y_hat3 <-"4.86116 + .80432*college + .06989*Insured + .42346*TwoParents"
+s4<-summary(sequential_model_4variable)
+y_hat4 <- "-9.27560 + .78353*college + .05521*Insured + .26938*TwoParents + .32184*PhysicalActivity"
+s5<-summary(sequential_model_5variable)
+y_hat5 <- "13.5911 + .7489*college + .2408*Insured + .4111*TwoParents + .3222*PhysicalActivity - .5147*HighSchool"
+s6<-summary(sequential_model_6variable)
+y_hat6 <- "18.1860 + .7446*College + .2390*Insured+ .4443*TwoParents + .2311*PhysicalActivity -.5794*HighSchool + .6454*HeavyDrinkers"
+s7<-summary(sequential_model_7variable)
+y_hat7 <- "-30.582429 + .737433*College + .019899*Insured+ .647313*TwoParents + .133189*PhysicalActivity -.003792*HighSchool + .657054*HeavyDrinkers+.303811*NonWhite"
+s8<-summary(sequential_model_8variable)
+y_hat8 <- "-26.457955 + .648634*College + .007249*Insured+ .492919*TwoParents + .049146*PhysicalActivity .247602*HighSchool + .551990*HeavyDrinkers+.279178*NonWhite + -.376175*smokers"
+s9<-summary(sequential_model_9variable)
+y_hat9 <- "-15.52228 + .61379*College + .02526*Insured+ .50137*TwoParents + -.02829*PhysicalActivity .22500*HighSchool + .52234*HeavyDrinkers+.27281*NonWhite + -.26301*smokers + -.27036*Obese"
+
+
+#Creating an empty table to look at R2
+#R2TableAllModels
+R2Table_AllModels<-data.frame("LinearRegressionVariable"=c("1variable", "2variable", "3variable", "4variable", "5variable", "6variable", "7variable", "8variable", "9variable"), "AdjR-squared"=c(0,0,0,0,0,0,0,0,0))
+
+models <- list(s1,s2,s3,s4,s5,s6,s7,s8,s9)
+
+for (i in 1:9){
+  t1R2<- models[[i]]$adj.r.squared
+  R2Table_AllModels[i,2] <-round(t1R2,5)
+}
+R2Table_AllModels
+
+```
+
+
+R-squared changes/progression as we add more and more variables.  We see that for the most part, adding more variables does not significantly improve in explaining variability.  However,  we see a relatively big jump when we go from a 6 variable model to a 7 variable model. However, I would be cautious to say that the 7th variable is the reason for this.  Order does matter here in what the 7th variable is.  If we chose a different 7th variable,  we may have seen a different number.
+
+```{r}
+#Create an empty table to populate R2 changes
+R2Change_AllModels<-data.frame("ModelCompare"=c("1var_2var", 
+                                                "2var_3var", 
+                                                "3var_4var", 
+                                                "4var_5var", 
+                                                "5var_6var", 
+                                                "6var_7var", 
+                                                "7var_8var", 
+                                                "8var_9var"), 
+                               "R-squaredChnge"=c(0,
+                                           0,
+                                           0,
+                                           0,
+                                           0,
+                                           0,
+                                           0,
+                                           0))
+#putting all models in a list for easy looping.
+models <- list(sequential_model_1variable,
+               sequential_model_2variable,
+               sequential_model_3variable,
+               sequential_model_4variable,
+               sequential_model_5variable,
+               sequential_model_6variable,
+               sequential_model_7variable,
+               sequential_model_8variable,
+               sequential_model_9variable)
+
+#loop through models and populate R2 change table.
+for (i in 1:8){
+  R2chnge <-modelCompare(models[[i]],models[[i+1]])
+  R2Change_AllModels[i,2]<-R2chnge$DeltaR2
+}
+R2Change_AllModels
+
+```
+
+### 8. Now that you have a sense of which explanatory variables contribute to explaining HOUSEHOLDINCOME, refit a model using only the set of variables you consider to be appropriate to model Y.  Report this model, interpret the coefficients, and interpret R-squared in the context of this problem.  Discuss why is it necessary to refit this model.
+
+***
+
+Running the model with all variables yielded an improvement in R-squared and to the adjusted R-squared (to an extent).  Because of this, R-squared may not be telling the whole story. Interestingly enough, When looking at the summary and focusing on the statistical signficance,  we see 3 out of the 9 that are statistically signficant (p<.05).  This is College, Nonwhite, and Twoparents.  All the other variables were insignificant when all variables were included in the model.  
+
+When we re-ran the model with just the 3 significant variables, we get an adj R-squared of .6875, actually slightly higher than the model with all variables.  This tells me a few things:
+these 3 variables alone explain alot about the variance in the model.
+It may be possible to run the model just on these 3 variables to get the as accurate prediction as the full model.
+When I added a 4th variable (Smokers for example.) to this 3 variable model,  that variable is still insignificant, which means that the variable is not as important.
+
+For this new model,  we see college and parents increases income by .78 and .76, while Non-white increases income by .31.  the benefit of using this smaller model if it is in fact as accurate as the larger model is that it may run a bit faster (for effeciency) if data is large, and it cuts out all the noise on the insignificant variables to help with interpretation.
+```{r}
+
+summary(lm(HouseholdIncome~ College+NonWhite+TwoParents, data=subdata_nondemographic))
+
+```
+
+
+
+### 10.	Given what you’ve learned from this modeling endeavor, what overall conclusions do you draw?   What is the “Story” contained in this data?  What have you learned?  What are your Prescriptive Recommendations for action based on this evidence?   Finally, feel free to reflect on what you’ve learned from a modeling perspective.
+
+***
+The story for this dataset is that there is quite a few types of relationship to consider when starting out with a linear regression model.  The r-squared to the dependent variable tells us the correlation between the response and the explanatory gives us a good starting point in building out the model. At the same time though, the relationship between the explanatory variables is also important.
+
+When starting out with the model on a single variable regression, that coefficient output that we get is a univariate look at it's impact on the response because other variables hasn't been introduced.  This coefficient is subconciously accounting for the interactions with the other variables.  When we add other variables in,  we start to see the marginal impact of each individual variable, so it is reasonable to see that coefficient change with each model.  
+
+As we add more variables, the r-squared will also change and tell us how much this much this model is explaining the variance.  We would see r-squared increase as more variables are added, so it would be beneficial to be aware of the existence of an adjusted r-squared metric.
+
+As for this data set exercise,  I was surprised that running a 3 variable explained as much variance as a model with all the variables.  This leads me to believe that I may be able to produce as an effective analysis with just the 3 variables and conclude that these 3 variables are the most important factors in predicting Income score.
+
