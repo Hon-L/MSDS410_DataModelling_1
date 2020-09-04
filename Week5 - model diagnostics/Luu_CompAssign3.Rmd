@@ -1,0 +1,329 @@
+---
+title: "Luu_CompAssign3"
+author: "Hon Luu"
+date: "5/9/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r message=FALSE}
+library(lessR)
+```
+
+
+```{r}
+data <- read.csv(file="NutritionStudy.csv",head=TRUE,sep=",", stringsAsFactors = TRUE)
+```
+
+```{r}
+summary(data)
+
+```
+
+###  1)	For all of the categorical variables in the dataset, recode the text based categories into numerical values that indicate group.  For example, for the VITAMIN variable, you could code it so that:  1=regular, 2=occasional, 3=never.  Save the categorical variables to the dataset.  
+***  
+
+```{r}
+data$Smoke_cat <- ifelse(data$Smoke=="No",0,1)
+data$Gender_cat <- ifelse(data$Gender=="Female",0,1)
+data$VitaminUse_cat <-ifelse(data$VitaminUse=="No",0,ifelse(data$VitaminUse=="Occasional",1,2))
+
+```
+
+
+### 2)	For the VITAMIN categorical variable, fit a simple linear model that uses the categorical variable to predict the response variable Y=CHOLESTEROL.  Report the model, interpret the coefficients, discuss hypothesis test results, goodness of fit statistics, diagnostic graphs, and leverage, influence and Outlier statistics. Recode the VITAMIN categorical variable so that you have a different set of indicator values.  For example, you could code it so that:  1=never, 2=occasional, 3=regular.  Re-fit an OLS simple linear model using the new categorization.  Report the model, interpret the coefficients, discuss test results, etc.   What is going on here?  
+***  
+
+The coefficients is as follows:  
+$Y = 246.599 -1.156X_{1} - 9.908X_{2}$  
+This is hard to interpret because we haven't set a baseline to compare against. Occasional vitamin  will decrease cholestoral by -1.156 units.  
+Regular vitamin  will decrease cholestoral by -9.908 units.
+
+The hypothesis test is a t test on the regression coefficient(the population slope) on whether there is a relationship between $Y$ and $X$  
+$H_{0}: \beta_{1} = 0$  
+$H_{a}: \beta_{1} \neq 0$  
+$H_{0}: \beta_{2} = 0$  
+$H_{a}: \beta_{2} \neq 0$  
+The p value for both are greater than .05, so we are not able to reject the null hypothesis that $H_{0}: \beta = 0$.  This also means that there is no relationship between these vitamin use and cholestoral (given the current format of the variable) and any relationship could be due to chance.
+
+The omnibus F-test also hypothesis:  
+
+$H_{0}: \beta = 0$  
+$H_{a}: \beta \neq 0$  
+This also fails as we see the F statistic to not be significant, so we are not able to reject the null hypothesis that beta = 0.
+
+The $R^{2}$ and adjusted $R^{2}$ is also extremely low which shows that this variable doesn't explain any variance in the model.
+
+Inspecting the Charts:  
+The residuals vs fitted graph appears to not be constant looking at the residuals.
+
+The Q-Q plot fails the pen test as we see some points deviates from the normal line, indicating it is not a normal distribution.  The leverage and scale location, we see outliers are present.
+
+
+
+
+```{r}
+model1<- lm(Cholesterol~VitaminUse, data=data)
+summary(model1)
+plot(model1)
+anova(model1)
+
+```
+
+Using the 0/1 categorization  
+The coefficients is as follows:  
+$Y = 246.599 -5.001X_{1}$  
+This is interpreted as if as the unit for vitamin use shifts 1 unit,  cholestorol will decrease by -3.195.  However, this doesn't exist because  the variable is not continuous even though we coded the value with numeric 0/1.    
+The hypothesis test is t test on the regression coefficient(the population slope) on whether there is a relationship between $Y$ and $X$  
+$H_{0}: \beta = 0$  
+$H_{0}: \beta \neq 0$  
+The p value of .564 is greater than .05, so we are not able to reject the null hypothesis that $H_{0}: \beta = 0$.  This also means that there is no relationship between these vitamin use and cholestoral (given the current format of the variable).
+
+The $R^{2}$ and adjusted $R^{2}$ is also extremely low which shows that this variable doesn't' explain any variance in the model.
+
+The omnibus test results imply the same decision as the prior model where we fail to reject the null hypothesis.
+
+Inspecting the Charts:  
+The Q-Q plot fails the pen test as we see some points deviates from the normal line, indicating it is not a normal distribution.
+
+leverage plot also produces outliers that we can see on the ends.
+
+
+Coding the variables as 0/1 does not help either as it doesn't change anything.  Although we are using numeric values,  it doesn't provide any benefit as interpretation is still difficult. The model still runs as it thinks the 0/1 and continuous, but the variable we are using is not continuous  We dont know what we are comparing against.  The correct way would be to dummy code the vaiables.
+
+```{r}
+model2<- lm(Cholesterol~VitaminUse_cat, data=data)
+summary(model2)
+plot(model2)
+anova(model2)
+```
+
+### 3)	Create a set of dummy coded (0/1) variables for the VITAMIN categorical variable.  Fit a multiple regression model using the dummy coded variables to predict CHOLESTEROL (Y).  Remember, you need to leave one of the dummy coded variables out of the equation.  That category becomes the “basis of interpretation.”  Report the model, interpret the coefficients, discuss hypothesis test results, goodness of fit statistics, diagnostic graphs, and leverage, influence and Outlier statistics.  Compare the findings here to those in task 2).  What has changed?  
+***  
+The coefficients is as follows:  
+$Y = 246.599 -1.156X_{1} - 9.908$  
+With dummy coding, our coefficient is now compared to the control (which is when vitamin use = 'No').  The model is now coded correctly and we can say that from no vitamin usage to occasional vitamin usage, coholestorol decreases by 1.156 units.  
+From no vitamin usage to regular vitamin usage, cholestorol decreases by 9.908 units.  
+This ends up lining up with the means of cholestorol at each grouping when we use the ANOVA function.  
+This also lines up with the results in model1.  The takeway is that it appears R does the dummy coding from behind the scenes, but doing it manually allows us to understand how to better interpret the coefficients.
+
+The hypothesis test is t test on the regression coefficient(the population slope) on whether there is a relationship between $Y$ and $X$  
+$H_{0}: \beta_{1} = 0$  
+$H_{a}: \beta_{1} \neq 0$  
+
+$H_{0}: \beta_{2} = 0$  
+$H_{a}: \beta_{2} \neq 0$  
+The p value for both variables is greater than .05, so we are not able to reject the null hypothesis that $H_{0}: \beta = 0$.  This also means that there is no relationship between these vitamin use and cholestoral.
+
+The $R^{2}$ and adjusted $R^{2}$ is also extremely low which shows that this variable doesn't' explain any variance in the model.
+
+Inspecting the Charts:  
+
+The Q-Q plot fails the pen test as we see some points deviates from the normal line, indicating it is not a normal distribution.
+
+
+
+```{r}
+#dummy variables
+data$vitamin_d0 <- ifelse(data$VitaminUse == "No",1,0)
+data$vitamin_d1 <- ifelse(data$VitaminUse == "Occasional",1,0)
+data$vitamin_d2 <- ifelse(data$VitaminUse == "Regular",1,0)
+
+#running OLS
+model3 <- lm(Cholesterol~vitamin_d1+vitamin_d2, data = data)
+
+
+
+```
+
+```{r}
+summary(model3)
+plot(model3)
+
+t1<-ANOVA(Cholesterol~VitaminUse, data=data)
+t1$out_descriptive
+```
+
+### 4)	For the VITAMIN categorical variable, use the NEVER categorical as the control or comparative group, and develop a set of indicator variables using effect coding.  Save these to the dataset. Fit a multiple regression model using the dummy coded variables to predict CHOLESTEROL(Y).   Report the model, interpret the coefficients, discuss hypothesis test results, goodness of fit statistics, diagnostic graphs, and leverage, influence and Outlier statistics.  Compare the findings here to those in task 3).  What has changed?  Which do you prefer?   Why?  
+***  
+The coefficients is as follows:  
+$Y = 242.911 + 2.532X_{1} - 6.220$  
+Using the effects coding, the interpretation is changed a bit.  instead of comparing the impact relative to the control (no vitamin usage), we are now comparing to the "Grand mean".  
+So essentially,  We say that ocassional vitamin usage increases cholestoral by 2.532 units, compared to the mean of the sample.  Conversly,  regular vitamin usage will decrease cholestorol usage by 6.220 units compared to the mean of the sample.  
+
+I think the preference of usage will depend on the use case.  Comparing to the overall population is useful when that is what you want to know, but I do see some concerns because if the data is heavily imbalanced to one side,  that can skew the interpretation, so the researcher needs to keep in mind the sample distribution.  Dummy coding is relative to a particular group, so it appears to be more "straight forward and easier to compare.  personally, I find dummy coding easier to interpret.
+
+The hypothesis test is t test on the regression coefficient(the population slope) on whether there is a relationship between $Y$ and $X$  
+$H_{0}: \beta_{1} = 0$  
+$H_{a}: \beta_{1} \neq 0$  
+
+$H_{0}: \beta_{2} = 0$  
+$H_{a}: \beta_{2} \neq 0$  
+The p value for both variables is greater than .05, so we are not able to reject the null hypothesis that $H_{0}: \beta = 0$.  This also means that there is no relationship between these vitamin use and cholestoral.
+
+Looking at the omnibus test:  
+$H_{0}: \beta_{1} = \beta_{2}=0$  
+$H_{a}:$ at least one$ \beta > 0$
+
+For both variables, we again fail to reject the null hypothesis and conclude that any relationship is due to chance.
+
+The $R^{2}$ and adjusted $R^{2}$ is also extremely low which shows that this variable doesn't' explain any variance in the model.
+
+Inspecting the Charts:  
+
+We see similar behavior as the prior views: failed Q-Q plots, outliers are present, and constant variance is failed.
+
+
+```{r}
+data$vitamin_effNo <- ifelse(data$VitaminUse=="No", -1,0)
+data$vitamin_effOccasional <- ifelse(data$VitaminUse=="Occasional",1,ifelse(data$VitaminUse=="No",-1,0))
+data$vitamin_effRegular <- ifelse(data$VitaminUse=="Regular",1,ifelse(data$VitaminUse=="No",-1,0))
+```
+
+
+```{r}
+model4 <-lm(data$Cholesterol~vitamin_effOccasional+vitamin_effRegular, data=data)
+```
+
+```{r}
+summary(model4)
+plot(model4)
+anova(model4)
+
+```
+
+
+### 5)	Discretize the ALCOHOL variable to form a new categorical variable with 3 levels.  The levels are:  
+### 0	if ALCOHOL = 0  
+### 1	if 0 < ALCOHOL < 10  
+### 2	if ALCOHOL >= 10  
+### Use these categories to create a set of indicator variables for ALCOHOL that use effect coding.  Save these to your dataset.  
+
+***  
+```{r}
+data$Alcohol_cat <- ifelse(data$Alcohol==0,0,ifelse(data$Alcohol<10,1,2))
+
+data$Alcohol_eff0 <-ifelse(data$Alcohol_cat==0, -1,0)
+data$Alcohol_eff1 <-ifelse(data$Alcohol_cat==1, 1,ifelse(data$Alcohol_cat==0, -1,0))
+data$Alcohol_eff2 <-ifelse(data$Alcohol_cat==2, 1,ifelse(data$Alcohol_cat==0, -1,0))
+
+```
+
+### 6)	At this point, you should have effect coded indicator variables for VITAMIN and 2 effect coded indicator variables for ALCOHOL.  Create 4 product variables by multiplying each of the effect coded indicator variables for VITAMIN by the effect coded indicator variables for ALCOHOL.  This is all pairwise products of the effect coded variables.  Now, we are going to test for interaction.  Fit an OLS multiple regression model using the 4 VITAMIN and ALCOHOL effect coded indicator variables plus the 4 product variables to predict CHOLESTEROL.  Call this the full model.   For the Reduced model, fit an OLS multiple regression model using only the effect coded variables for VITAMIN and ALCOHOL to predict CHOLESTEROL.  Conduct a nested model F-test using the Full and Reduced Models described here.  Be sure to state the null and alternative hypothesis, make a decision regarding the test, and interpret the result.   Obtain a means plot to illustrate any interaction, or lack thereof, to help explain the result.  
+***  
+Nested F test:  
+$H_{0}: \beta_{1} =\beta_{2}=\beta_{3}=\beta_{4}=0$  
+$H_{a}:$ at least one $\beta_{i} \neq 0$  
+After performing a nested F test on with the Full and reduced model, the F statistic tells us that we can not reject the null hypothesis  that all the $\beta = 0$.  This tells us a couple things:  
+The Full model is not significantly better than the reduced model.  
+Whichever model we use, we still see the issue of being unable to reject the null hypothesis, low $R^2$, and just the fact that the model is not that great at predicting cholestorol.
+
+```{r}
+data$V_occXA_1 <- data$vitamin_d1*data$Alcohol_eff1
+data$V_occXA_2 <- data$vitamin_d1*data$Alcohol_eff2
+data$V_regXA_1 <- data$vitamin_d2*data$Alcohol_eff1
+data$V_regXA_2 <- data$vitamin_d2*data$Alcohol_eff2
+```
+
+
+```{r}
+Fullmodel <-lm(Cholesterol~vitamin_effOccasional+vitamin_effRegular+Alcohol_eff1+Alcohol_eff2 + V_occXA_1+V_occXA_2 + V_regXA_1+V_regXA_2, data=data)
+
+ReducedModel <-lm(Cholesterol~vitamin_effOccasional+vitamin_effRegular+Alcohol_eff1+Alcohol_eff2, data=data)
+```
+
+```{r}
+summary(Fullmodel)
+summary(ReducedModel)
+anova(Fullmodel, ReducedModel)
+```
+
+We do see interaction between the variables for vitamin use and alcohol.  Interestingly enough, for no vitamin usage and occasional vitamin usage, the relationship to alcohol is a V or a upsidedown V shape.  For example, in the case of no vitamin usage,  cholestorol increases from 0 alcohol, to <10 alcohol, but then decreases when alcohol is greater than 10.  
+Whatever the case, we see interactions, but they are not significant to the model for prediction, so we may safely drop the interactions as the reduced model may be sufficient in prediction.
+
+
+
+```{r}
+interaction.plot(x.factor = data$Alcohol_cat, trace.factor = data$VitaminUse_cat, response = data$Cholesterol)
+
+```
+
+
+
+### 7)	There are 2 other categorical variables in this dataset, namely GENDER and SMOKE.   Do these variables interact amongst themselves or with VITAMIN or ALCOHOL when it comes to modeling CHOLESTEROL?  Obtain means plots to see if there is interaction.  Conduct nested model F-tests to rule out randomness as the explanation for observed patterns.  Report your findings.
+
+
+interactions plot  
+For the most part, looking at the plots, we see interactions between the variables that the means of the different categories combination are different.  If there was no interaction, we would just see a flat line.
+```{r}
+
+interaction.plot(x.factor = data$Alcohol_cat, trace.factor = data$Gender_cat, response = data$Cholesterol)
+interaction.plot(x.factor = data$Alcohol_cat, trace.factor = data$Smoke_cat, response = data$Cholesterol)
+
+interaction.plot(x.factor = data$VitaminUse_cat, trace.factor = data$Gender_cat, response = data$Cholesterol)
+interaction.plot(x.factor = data$Alcohol_cat, trace.factor = data$Smoke_cat, response = data$Cholesterol)
+
+interaction.plot(x.factor = data$Gender_cat, trace.factor = data$Smoke_cat, response = data$Cholesterol)
+
+```
+
+
+```{r}
+#make sure all my factors are factor format
+data$VitaminUse_cat <-as.factor(data$VitaminUse_cat)
+data$Alcohol_cat <- as.factor(data$Alcohol_cat)
+data$Smoke_cat <-as.factor(data$Smoke_cat)
+data$Gender_cat <- as.factor(data$Gender_cat)
+```
+
+Full Model and Reduced model on Smoke and Gender
+```{r}
+FM_SG <- lm(Cholesterol~Smoke_cat + Gender_cat + Smoke_cat*Gender_cat, data=data)
+RM_SG <- lm(Cholesterol~Smoke_cat + Gender_cat, data=data)
+summary(FM_SG)
+summary(RM_SG)
+anova(FM_SG, RM_SG)
+
+```
+
+Vitamin and Gender
+```{r}
+FM_VG <- lm(Cholesterol~VitaminUse_cat + Gender_cat + VitaminUse_cat*Gender_cat, data=data)
+RM_VG <- lm(Cholesterol~VitaminUse_cat + Gender_cat, data=data)
+summary(FM_VG)
+summary(RM_VG)
+anova(FM_VG, RM_VG)
+```
+
+
+Alcohol and Smoke
+```{r}
+FM_AS <- lm(Cholesterol~Alcohol_cat + Smoke_cat + Alcohol_cat*Smoke_cat, data=data)
+RM_AS <- lm(Cholesterol~Alcohol_cat + Smoke_cat, data=data)
+summary(FM_AS)
+summary(RM_AS)
+anova(FM_AS, RM_AS)
+```
+
+Alcohol and Gender
+```{r}
+FM_AG <- lm(Cholesterol~Alcohol_cat + Gender_cat + Alcohol_cat*Gender_cat, data=data)
+RM_AG <- lm(Cholesterol~Alcohol_cat + Gender_cat, data=data)
+summary(FM_AG)
+summary(RM_AG)
+anova(FM_AG, RM_AG)
+```
+After completing a nested F test on all the combinations,  the conclusion is the same as above:
+
+$H_{0}: \beta_{1} =\beta_{2}=\beta_{3}=\beta_{4}=0$   
+$H_{a}:$ at least one $\beta_{i} \neq 0$  
+What we see is that for all scenarios, we can't reject the null hypothesis that the Betas are 0.  This means that the interaction terms do not provide any benefit to the model and from an overall model perspective,  the $\beta >0$ should may as well be due to chance.  
+On the flip side, the model itself appears to not be significant anyways with the linear regression summary showing p values greater than .05.  
+So overall, we know that the interactions do not provide benefit in predicting cholestorl, and due to the low $R^2$, high p value,  this is not a robust model for prediction.
+
+### 8)	Please write a reflection on your experiences from this assignment.  
+***  
+This was an interesting assignment.  I enjoyed manually creating the dummy variables because now I have a better sense of what is going on when R models with categorical variables.  Working with interactions and continuing to learn to fit the model also was beneficial and does bring a few questions to my mind. For example, how would I work with interactions if I have more then 10 variables? would I need to manually code the interactions or is there a rule of thumb for a way to pick the ones the best ones to investigate?  Using the F test some more is startintg to make me a bit more comfortable.  It feels like both are measuring the same thing, but as I work through it more and stating the null and alternate hypothesis, I'm feeling a bit more comfortable with it.
