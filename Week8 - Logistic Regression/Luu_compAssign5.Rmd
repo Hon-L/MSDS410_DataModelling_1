@@ -1,0 +1,301 @@
+---
+title: "Luu_compAssignment5"
+author: "Hon Luu"
+date: "5/28/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r warning=FALSE}
+library(ggplot2)
+library(dplyr)
+library(lessR)
+```
+
+
+##### 1.For the 2x2 table, determine the odds and the probabilities of texting while driving among males and females.  Then compute the odds ratio of texting while driving that compares males to females.  (5 points).  
+***  
+  
+
+```{r}
+prob_men <- 30/(30+10)
+prob_women <- 34/((34+6))
+OR_men <- prob_men/(1-prob_men)
+OR_women <- prob_women/(1-prob_women)
+OR_m.w <- OR_men/OR_women
+
+```
+
+The probability of Men texting is `r prob_men`.  
+The probability of Women texting is `r prob_women`.  
+The Odds ratio of Men who text and drive is `r OR_men`.  
+The odds ratio of Men who text and drive is `r OR_women`.  
+The odds ratio of Men over Women is `r OR_women`.  
+***  
+##### 2.   Download the data file RELIGION.CSV and import it into R.  Use R and your EDA skills to gain a basic understanding of this dataset.   Please note, there is a variable labeled RELSCHOL.  This variable indicates if a survey respondent attends a religiously affiliated private secondary school (1) or not (0).   Use this dataset to address the following questions:  (10 points).  
+***  
+
+```{r}
+data <- read.csv("RELIGION.CSV",stringsAsFactors = TRUE)
+data<-na.omit(data)
+#data<-lapply(data, as.factor)
+#data <-as.data.frame(data)
+
+
+```
+Basic EDA for a few variables:  For the EDA, we'll just do a few basic graphs and tabulation tables to understand the distribution of different types of people who attend religious school.  
+
+By RelSchool: not a lot attend religious school to begin with, so the data is very imbalanced.  
+By Age:  We see a difference in the mean age between those who attend religious school.  The ones who attend range in the age of 35 to 40 while the ones who dont attend range between 35 to 60.  The mean is also slightly different with the ones who dont attend religious school slightly higher.  
+By education: the ranges and mean are very similar.  
+By Income: People who do attend religious school have higher mean income.  
+By Attend:  Attend has a lot of outliers for the ones that attend religious school.  
+By Marriage: more married people attend religious school than not married.  
+By Race: Almost twice as many whites attend religious school than non-white.  
+
+
+```{r}
+str(data)
+BoxPlot(AGE, by=RELSCHOL, data=data)
+BoxPlot(EDUC, by=RELSCHOL, data=data)
+BoxPlot(INCOME, by=RELSCHOL, data=data)
+BoxPlot(ATTEND, by=RELSCHOL, data=data)
+BoxPlot(MARRIED, by = RELSCHOL, data=data)
+table(data$RELSCHOL)
+xtabs(~RELSCHOL+MARRIED, data=data)
+xtabs(~RELSCHOL+RACE, data=data)
+```
+
+##### 2a Compute the overall odds and probability of attending a religious school, assuming this data is from a random sample.  
+***  
+
+
+```{r}
+xtabs(~RELSCHOL, data=data)
+xtabs(~RELSCHOL+RACE, data=data)
+P_relschool <- 80/(80+546)
+P_notrelschool <- 1-P_relschool
+OR <- P_relschool/P_notrelschool
+
+```
+
+The probability of attendinga religious school is `r P_relschool`.  
+The probability of not attending a religious school is `r P_notrelschool`.  
+The odds ratio is `r OR`
+
+
+##### 2b Cross-tabulate RELSCHOL with RACE (coded:  0=non-white, 1=white).  What are the probabilities that non-white students and white students attend religious schools?  What are the odds that white students and non-white students attend religious schools?  What is the odds ratio that compares white and non-white students?  
+***  
+
+
+```{r}
+Race_School<-xtabs(~RELSCHOL+RACE, data=data)
+(addmargins(Race_School))
+
+p_nonwhite <- 26/(102)
+odds_nonwhite <-p_nonwhite/(1-p_nonwhite)
+p_white <- 54/(524)
+odds_white <- p_white/(1-p_white)
+race_OR <- odds_white/odds_nonwhite
+```
+The probabilility that nonwhite students attend religious school is `r p_nonwhite`.  
+The probabilility that white students attend religious school is `r p_white`.  
+The odds that nonwhite students attend religious school is `r odds_nonwhite`.    
+The odds that white students attend religious school is `r odds_white`.  
+The odds ratio that compare white and nonwhite is `r race_OR`.  
+
+
+##### 2c Plot RELSCHOL (Y) by INCOME as a scatterplot.  The INCOME variable is actually an ordinal variable that is associated with income brackets.  This is an old dataset, so for example, INCOME=4  $20,000-$29,999.   Is there a value of INCOME that seems to separate or discriminate between those attending religious schools and those that don’t?   Create a variable that dichotomizes INCOME based on this value you observed.  Call this new variable D_INCOME.  Cross-tabulate RELSCHOL with D_INCOME.  What are the probabilities that low income students and higher students attend religious schools?  What are the odds that lower income students and higher income students attend religious schools?  What is the odds ratio that compares lower and higher income students?  
+***  
+The scatter plot doesn't appear to give a definite answer as to which income level discriminates between religious school and non religious school.  In all income brackets,  non-religious school attendance is more prominant.  
+Looking at the crosstabulation table and focusing on column proportion though, we do see the higher proportion changes from income bracket 2 to 3.  Assuming there is not any credibility issues with low volume,  since we see the big jump in proportion between income 2 to 3,  I would say that 3 is the discriminating point.
+```{r}
+print(ggplot(data=data, aes(x=RELSCHOL, y=INCOME)) + geom_jitter())
+tabs<-xtabs(~RELSCHOL+INCOME, data=data)
+
+(round(prop.table(tabs,2),2))
+
+
+```
+
+
+
+
+```{r}
+data$D_Income <- ifelse(as.numeric(data$INCOME)>=3,1,0)
+tabs<-xtabs(~RELSCHOL+D_Income, data=data)
+addmargins(tabs)
+
+p_low <- 2/84
+p_high <- 74/506
+OR_low <- p_low/(1-p_low)
+OR_high <- p_high/(1-p_high)
+lowhigh <- OR_low/OR_high
+```
+
+The probabilility that low income attend religious school is `r p_low`.  
+The probabilility that high income attend religious school is `r p_high`.  
+The Odds ratio of low income attend religious school is `r OR_low`.  
+The Odds ratio of high income attend religious school is `r OR_high`.  
+The Odds ratio of low income to high income that attend religious school is `r lowhigh`.  
+
+##### 2d Plot RELSCHOL (Y) by ATTEND as a scatterplot.  The ATTEND variable is the number of times the survey respondent attends a service during a month.  Cross-tabulate RELSCHOL with ATTEND.  Are the proportion profiles the same for those attending religious school versus not, across the values of the ATTEND variable?  Is there a value of ATTEND that seems to separate or discriminate between those attending religious schools and those that don’t?   Save this value for later.  
+***  
+The proportions are not the same across the attend profiles.  With attendence, we see the bigist drop at 5 attendance.  so 5 may be a discriminating point.
+```{r}
+
+ggplot(data=data, aes(x=RELSCHOL, y=ATTEND)) + geom_jitter()
+tabs<-xtabs(~RELSCHOL+ATTEND, data=data)
+
+round(prop.table(tabs,2),2)
+```
+
+##### 3.   First, fit a logistic model to predict RELSCHOL (Y) using only the RACE (X) variable.  Call this Model 1.   Report the logistic regression model and interpret the parameter estimates for Model 1.  Report the AIC and BIC values for Model 1.    (3 points).  
+***  
+
+
+```{r}
+model1 <- glm(RELSCHOL~RACE, family="binomial", data=data)
+summary(model1)
+
+m1OR <- (exp(-1.0911)-1)*100
+
+m1AIC<-AIC(model1)
+m1BIC<-BIC(model1)
+m1AIC
+m1BIC
+```
+
+The logistic regression model uses Race = 0 as the basis of interpretation.  To make the interpreation easier, we will convert the coefficient from log-odds to odds.  by exponentiating -1.0911 and subtracting 1, we get the odds ratio of `r m1OR`.  this means that from non-white to white, the odds of going to a religious school decreses by `r m1OR` percent.
+
+The AIC is `r m1AIC`.  
+The BIC is `r m1BIC`.  
+
+
+##### 4.  Next, fit a logistic model to predict RELSCHOL (Y) using only the INCOME(X) variable.   Call this Model 2.   For Model 2, do the following:  (6 points).  
+***  
+##### Report the logistic regression model and interpret the parameter estimates for Model 2.  Report the AIC and BIC values for Model 2.   How do these compare to Model 1?  
+
+
+
+
+```{r}
+data$INCOME <- as.factor(data$INCOME)
+model2 <- glm(RELSCHOL~INCOME, family="binomial", data=data)
+summary(model2)
+m2AIC<-AIC(model2)
+m2BIC<-BIC(model2)
+
+data$m2fitted <- model2$fitted.values
+ggplot(data=data, aes(x=INCOME, y=m2fitted)) + geom_jitter()
+
+```
+
+The first observation is that most of the variables are not significant.  That aside though, the overall and general impression  is that the higher the income, the higher the odds in attending a religious school.  There are a couple dips in income brack 7,9,12, so that may be worth further investigation.  The trend may not be a monotoic increasing trend.  Thinking of model fit, the AIC in this model does perform better, but the BIC is higher in this model.  
+
+The AIC is `r m2AIC`.  
+The BIC is `r m2BIC`.  
+
+##### Use the logit predictive equation for Model 2 to compute PI for each record.   Plot PI (Y) by INCOME(X).   At what value of X, does the value of PI exceed 0.50?   How does this value compare to your visual estimate from problem 2c)?   
+***  
+The equation to calculate the probability would be to utilize each coefficient in the summary output.  
+The equation would be $Y=-3.6109 + \beta_i*Income$ where $\beta$ would be the coefficient of whichever income bracket the observation falls into.  In our case, after we get our $Y$, we would $e^Y$ that value to get to the odds ratio.  we would then  convert it back to probability by $\frac{e^y}{1+e^y}$.  
+
+For this exercise, the model output has fitted values so we dont have to manually calculate it. 
+
+The plot appears to confirm that none of the probaiblities ever reach 50%.  Overall, the model seems to tell me that potentially,the discriminating point is at income bracket = 8, versus my original thought of 3.
+
+
+##### 5.  Next, fit a logistic model to predict RELSCHOL (Y) using only the ATTEND(X) variable.   Call this Model 3.   For Model 3, do the following:  (6 points).  
+***  
+#####Report the logistic regression model and interpret the parameter estimates for Model 3.  Report the AIC and BIC values for Model 3.   How do these compare to Models 1 and 2?  
+
+
+
+```{r}
+data$ATTEND <- as.factor(data$ATTEND)
+model3 <- glm(RELSCHOL~(ATTEND), family="binomial", data=data)
+summary(model3)
+m3AIC<-AIC(model3)
+m3BIC<-BIC(model3)
+
+data$m3fitted <- model3$fitted.values
+
+
+ggplot(data=data, aes(x=ATTEND, y=m3fitted)) + geom_jitter()
+
+```
+
+The AIC is `r m3AIC`.  
+The BIC is `r m3BIC`.  
+
+Looking at the output summary, the higher the attendance the higher the coefficient (which translates to higher probability of attending religious school).  We get a slight increase at attendance = 5, but then it dips backs down.  Again,  the values are not significant though.
+
+Compared to model 1 and 2, model 2 still has the lowest AIC, so model may be a better model.  
+
+##### Use the logit predictive equation for Model 3 to compute PI for each record.   Plot PI (Y) by INCOME(X).   At what value of X, does the value of PI exceed 0.50?   How does this value compare to your visual estimate from problem 2d)?   
+To get the probability for each record,  we relied on the model output, but conceptually, the calculations would be done the same way as model2.  In this one, again, we dont see any probabilities over 50%. my visual estimate from 2d seemed to agree that Attendance = 5 is a discriminating point.
+
+
+##### 6.  Finally, fit a logistic model to predict RELSCHOL (Y) using RACE, INCOME and ATTEND as explanatory (X) variables.  Please consider INCOME and ATTEND to be continuous variables.  Call this Model 4.   For Model 4, do the following:  (9 points).  
+***  
+##### Report the logistic regression model and interpret the parameter estimates for Model 4.  Report the AIC and BIC values for Model 4.   How does this model compare to Modesl 1, 2 and 3?  
+
+```{r}
+data$RACE <- as.factor(data$RACE)
+model4 <- glm(RELSCHOL~(RACE)+as.numeric(INCOME)+ as.numeric(ATTEND), family="binomial", data=data)
+summary(model4)
+m4AIC<-AIC(model4)
+m4BIC<-BIC(model4)
+
+
+nonwhite<-exp(-17.6366-1.4271*0 +2.0046*4+2.3283*5)
+ORnonwhite <- nonwhite/(1+nonwhite)
+ORnonwhite
+
+white<-exp(-17.6366-1.4271*1 +2.0046*4+2.3283*5)
+ORwhite <- white/(1+white)
+
+Oddsrace <- nonwhite/white
+
+
+```
+
+In this one, we see the effect of all variables combined.  The interpretation would be based on the basis of comparison for each variable.  White appears to be less likely to go to religious school.  Higher income is more likely, and the higher the attendance, the higher the chance of attending a religious school.  
+
+The AIC is `r m4AIC`.  
+The BIC is `r m4BIC`.  
+The AIC is the lowest in this model, so it fits the best.  The BIC did increase a bit, so we would need to be cautious for overfitting.  
+
+##### For those who attend religious service 5 days per month (attend=5) and have a family income of $20-$29,000 (INCOME=4), what are the predicted odds of attending a religious school for white and non-white students?
+
+Nonwhite:  
+$Y=-17.6366-1.4271*0 +2.0046*4+2.3283*5$ = $e^Y$ = $\frac{e^Y}{1+e^Y}$ = `r ORnonwhite`  
+White:  
+$Y=-17.6366-1.4271*0 +2.0046*4+2.3283*5$ = $e^Y$ = $\frac{e^Y}{1+e^Y}$ = `r ORwhite`  
+#####What is the adjusted odds ratio for race?  Interpret this odds ratio.  
+The odds ratio of white and nonwhite is `r Oddsrace`.  comparing the odds ratio of race, we are essentially controlling for Income and Attend, and can say that for race equal white,  they are `r Oddsrace` more likely to attend religious school.
+
+
+##### 7.   For Models 1, 2 and 3, use the logit models to make predictions for RELSCHOL.   Note, you will have to calculate the estimated logit and then convert it into PI_estimates for each module.  The classification rule is:    If PI < 0.50, predict 0; otherwise predict 1 for RELSCHOL.    Obtain a cross-tabulation of RELSCHOL with the predicted values for each model.   Compare the correct classification rates for each of the three models.   (6 points).  
+
+***  
+For all 3 models, since none of our model predicted anything above 50%, we did not predict any one attending religious school.  However, we predicted 87% of the time correclty when they did not attend religious school.  
+
+```{r}
+
+data$m1fitted <- model1$fitted.values
+
+data$m1threshold <-ifelse(data$m1fitted >=.5,1,0)
+data$m2threshold <-ifelse(data$m2fitted >=.5,1,0)
+data$m3threshold <-ifelse(data$m3fitted >=.5,1,0)
+table(data$RELSCHOL,data$m1threshold, dnn = c("relschol", "predict"))
+table(data$RELSCHOL,data$m2threshold, dnn = c("relschol", "predict"))
+table(data$RELSCHOL,data$m3threshold, dnn = c("relschol", "predict"))
+```
+
+#####8.    In plain English, what do you conclude about the relationship between a student’s race/ethnicity, religious service attendance, family income and attending a religious school?  (5 points) .  
+The conclusion in this is that higher income, higher attendance and nonwhite are more likely to attend religious school.  However,  a big caveat is the model accuracy.  With a heavy imbalance, insignificant variables, it's hard to determine if the model did a good job at the prediction.
